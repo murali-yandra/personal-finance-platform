@@ -1,0 +1,1 @@
+"""Transactions domain skeleton."""

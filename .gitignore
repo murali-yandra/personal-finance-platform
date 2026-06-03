@@ -1,0 +1,50 @@
+# Environment and secrets
+.env
+.env.*
+*.env
+backend/.env
+backend/.env.*
+!.env.example
+!backend/.env.example
+
+# Python generated files
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Python environments
+.venv*/
+venv/
+
+# Build and packaging output
+build/
+dist/
+*.egg-info/
+
+# Local database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+backend/logs/*
+!backend/logs/.gitkeep
+
+# Local Docker Compose overrides
+docker-compose.override.yml
+compose.override.yml
+
+# Editor and OS files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+

@@ -1,0 +1,1 @@
+"""Balances domain skeleton."""

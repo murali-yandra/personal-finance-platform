@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: finance
+          POSTGRES_USER: finance_app
+          POSTGRES_PASSWORD: finance_app_ci_password
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U finance_app -d finance"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: backend/.python-version
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: uv sync --extra dev --frozen
+
+      - name: Run tests
+        working-directory: backend
+        run: uv run pytest
+
+      - name: Run DB smoke test
+        working-directory: backend
+        env:
+          RUN_DB_SMOKE_TEST: "1"
+          DATABASE_URL: postgresql+psycopg://finance_app:finance_app_ci_password@localhost:55432/finance?connect_timeout=5
+        run: uv run pytest tests/test_db_session.py
+
+      - name: Run Ruff
+        working-directory: backend
+        run: uv run ruff check .
+
+      - name: Check Black formatting
+        working-directory: backend
+        run: uv run black --check .
+
+      - name: Check import sorting
+        working-directory: backend
+        run: uv run isort --check-only .
+
+      - name: Validate Docker Compose configuration
+        run: docker compose --env-file backend/.env.example config
+
+      - name: Build Docker image
+        run: docker compose --env-file backend/.env.example build backend

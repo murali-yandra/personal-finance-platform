@@ -1,0 +1,66 @@
+﻿name: ledger-ai
+
+services:
+  backend:
+    build:
+      context: ./backend
+    container_name: ledger-ai-backend
+    restart: unless-stopped
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      APP_NAME: ${APP_NAME:-Personal Finance Tracking Platform}
+      APP_VERSION: ${APP_VERSION:-0.1.0}
+      APP_DEBUG: ${APP_DEBUG:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      DATABASE_ECHO: ${DATABASE_ECHO:-false}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      INGEST_API_KEY: ${INGEST_API_KEY:?INGEST_API_KEY is required}
+      ENABLE_AI: ${ENABLE_AI:-false}
+      ENABLE_TELEGRAM: ${ENABLE_TELEGRAM:-false}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - ledger-ai-network
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5).read()\"",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  postgres:
+    image: postgres:15
+    container_name: ledger-ai-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-finance}
+      POSTGRES_USER: ${POSTGRES_USER:-finance_app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ledger-ai-network
+    volumes:
+      - ledger-ai-postgres-data:/var/lib/postgresql/data
+
+networks:
+  ledger-ai-network:
+    name: ledger-ai-network
+    driver: bridge
+
+volumes:
+  ledger-ai-postgres-data:
+    name: ledger-ai-postgres-data
+
+
