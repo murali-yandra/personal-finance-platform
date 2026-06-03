@@ -1,6 +1,35 @@
-# Ledger AI / Personal Finance Tracking Platform
+# Personal Finance Tracking Platform
 
-Sprint 0 backend foundation for the Personal Finance Tracking Platform.
+A production-grade personal finance platform designed to track accounts, transactions, credit cards, balances, transfers, and financial insights.
+
+Ledger AI is the current project folder and Docker resource name for the Sprint 0 backend foundation.
+
+## Tech Stack
+
+- FastAPI
+- PostgreSQL
+- SQLModel
+- Alembic
+- Docker
+- Python 3.12
+- GitHub Actions
+- Ollama, future
+- Telegram Bot, future
+
+## Architecture
+
+- Modular Monolith
+- Event-Driven Internal Workflows
+- UUID-based Entities
+- Decimal Financial Calculations
+- Soft Delete Support
+- Audit Logging
+- Merchant Pattern Learning, future
+- Account Balance Reconciliation, future
+
+## Status
+
+Sprint 0 completed and approved.
 
 This project currently includes infrastructure only: FastAPI startup, health checks, environment configuration, SQLModel/PostgreSQL wiring, Alembic scaffold, Docker setup, event scaffolding, security placeholder, financial calculator placeholder, and tests.
 
@@ -15,7 +44,7 @@ Required tools:
 - Python 3.12
 - uv
 - Docker Desktop
-- Git, optional but recommended
+- Git
 
 Check installed versions:
 
@@ -300,6 +329,3 @@ Start Docker Desktop, wait until it says Docker is running, then rerun:
 ```powershell
 docker compose version
 ```
-
-
-
