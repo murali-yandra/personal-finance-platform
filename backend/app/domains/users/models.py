@@ -1,8 +1,8 @@
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import Column, DateTime, Index, Text, func
-from sqlmodel import Field, SQLModel
+from sqlalchemy import Column, DateTime, Index, Text, UniqueConstraint, func
+from sqlmodel import Field, Relationship, SQLModel
 
 
 class User(SQLModel, table=True):
@@ -41,3 +41,43 @@ class User(SQLModel, table=True):
         default=None,
         sa_column=Column(DateTime(timezone=False), nullable=True),
     )
+
+    settings: "UserSettings" = Relationship(
+        back_populates="user",
+        sa_relationship_kwargs={"uselist": False},
+    )
+
+
+class UserSettings(SQLModel, table=True):
+    """Database entity for per-user preferences."""
+
+    __tablename__ = "user_settings"
+    __table_args__ = (UniqueConstraint("user_id", name="uq_user_settings_user"),)
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    user_id: UUID = Field(foreign_key="users.id", nullable=False)
+    notification_mode: str = Field(
+        default="LOW_CONFIDENCE_ONLY",
+        max_length=50,
+        nullable=False,
+    )
+    ai_suggestions_enabled: bool = Field(default=False, nullable=False)
+    historical_import_mode: str | None = Field(default=None, max_length=50)
+    preferred_language: str = Field(default="en", max_length=20, nullable=False)
+    created_at: datetime = Field(
+        sa_column=Column(
+            DateTime(timezone=False),
+            nullable=False,
+            server_default=func.now(),
+        )
+    )
+    updated_at: datetime = Field(
+        sa_column=Column(
+            DateTime(timezone=False),
+            nullable=False,
+            server_default=func.now(),
+            onupdate=func.now(),
+        )
+    )
+
+    user: User = Relationship(back_populates="settings")
