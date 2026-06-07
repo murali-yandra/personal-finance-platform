@@ -5,7 +5,7 @@ from sqlalchemy import engine_from_config, pool
 from sqlmodel import SQLModel
 
 from app.config import get_settings
-from app.domains.users import User  # noqa: F401
+from app.domains.users import User, UserSettings  # noqa: F401
 
 config = context.config
 
