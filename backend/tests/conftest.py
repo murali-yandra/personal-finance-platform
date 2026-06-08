@@ -1,4 +1,4 @@
-﻿import os
+import os
 from collections.abc import AsyncGenerator
 
 import pytest_asyncio
@@ -9,7 +9,7 @@ os.environ.setdefault(
     "postgresql+psycopg://placeholder_user:placeholder_password"
     "@localhost:5432/placeholder_db?connect_timeout=1",
 )
-os.environ.setdefault("JWT_SECRET", "placeholder-test-jwt-secret")
+os.environ.setdefault("JWT_SECRET", "placeholder-test-jwt-secret-32-bytes")
 os.environ.setdefault("INGEST_API_KEY", "placeholder-test-ingest-api-key")
 
 from app.main import app
