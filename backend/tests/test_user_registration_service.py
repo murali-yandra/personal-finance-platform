@@ -1,8 +1,10 @@
 from collections.abc import Generator
+from uuid import uuid4
 
 import pytest
 from argon2 import PasswordHasher
 from argon2.low_level import Type
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
@@ -126,3 +128,31 @@ def test_register_user_rejects_blank_display_name(
         session.exec(select(User).where(User.email == "blank@example.com")).first()
         is None
     )
+
+
+class IntegrityFailingSession:
+    def add(self, _value: object) -> None:
+        return None
+
+    def flush(self) -> None:
+        raise IntegrityError(
+            statement="INSERT INTO user_settings",
+            params={},
+            orig=Exception("UNIQUE constraint failed: user_settings.user_id"),
+        )
+
+
+def test_user_repository_reraises_non_email_integrity_errors() -> None:
+    user_id = uuid4()
+    repository = UserRepository(IntegrityFailingSession())
+
+    user = User(
+        id=user_id,
+        email="integrity@example.com",
+        password_hash="$argon2id$test",
+        display_name="Integrity Test",
+    )
+    settings = UserSettings(user_id=user_id)
+
+    with pytest.raises(IntegrityError):
+        repository.add_user_with_settings(user, settings)

@@ -1,3 +1,4 @@
+import logging
 from uuid import uuid4
 
 from fastapi import FastAPI, Request
@@ -5,10 +6,17 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.shared.exceptions.base import ApplicationError
-from app.shared.schemas.responses import ErrorResponse, ErrorResponseDetail
+from app.shared.schemas.responses import (
+    ErrorResponse,
+    ErrorResponseDetail,
+    ValidationErrorDetail,
+)
 
 REQUEST_ID_HEADER = "X-Request-ID"
 CORRELATION_ID_HEADER = "X-Correlation-ID"
+UNEXPECTED_ERROR_MESSAGE = "An unexpected error occurred."
+
+logger = logging.getLogger(__name__)
 
 
 def register_exception_handlers(application: FastAPI) -> None:
@@ -36,7 +44,44 @@ def register_exception_handlers(application: FastAPI) -> None:
             status_code=400,
             code="VALIDATION_ERROR",
             message="Request validation failed.",
+            details=_validation_error_details(exc),
         )
+
+    @application.exception_handler(Exception)
+    async def unexpected_error_handler(
+        request: Request,
+        exc: Exception,
+    ) -> JSONResponse:
+        logger.error(
+            "Unhandled API exception",
+            exc_info=(type(exc), exc, exc.__traceback__),
+        )
+        return _error_response(
+            request=request,
+            status_code=500,
+            code="UNEXPECTED_ERROR",
+            message=UNEXPECTED_ERROR_MESSAGE,
+        )
+
+
+def _validation_error_details(
+    exc: RequestValidationError,
+) -> list[ValidationErrorDetail]:
+    details: list[ValidationErrorDetail] = []
+    for error in exc.errors():
+        location = error.get("loc", ())
+        field_parts = [
+            str(part)
+            for part in location
+            if part not in {"body", "query", "path", "header"}
+        ]
+        details.append(
+            ValidationErrorDetail(
+                field=".".join(field_parts) or "request",
+                message=str(error.get("msg", "Invalid value.")),
+            )
+        )
+    return details
 
 
 def _error_response(
@@ -44,6 +89,7 @@ def _error_response(
     status_code: int,
     code: str,
     message: str,
+    details: list[ValidationErrorDetail] | None = None,
 ) -> JSONResponse:
     request_id = request.headers.get(REQUEST_ID_HEADER, str(uuid4()))
     correlation_id = request.headers.get(CORRELATION_ID_HEADER, request_id)
@@ -53,9 +99,10 @@ def _error_response(
             message=message,
             request_id=request_id,
             correlation_id=correlation_id,
+            details=details,
         )
     )
     return JSONResponse(
         status_code=status_code,
-        content=payload.model_dump(),
+        content=payload.model_dump(exclude_none=True),
     )

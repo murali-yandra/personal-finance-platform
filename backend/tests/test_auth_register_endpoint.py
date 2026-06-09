@@ -1,3 +1,4 @@
+import logging
 from collections.abc import AsyncGenerator, Generator
 from uuid import UUID
 
@@ -7,6 +8,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
+from app.api.auth import get_registration_service
 from app.db.session import get_session
 from app.domains.users.models import User, UserSettings
 from app.main import app
@@ -44,6 +46,10 @@ async def auth_client(override_session: None) -> AsyncGenerator[AsyncClient, Non
         base_url="http://testserver",
     ) as client:
         yield client
+
+
+def _validation_detail(error: dict, field: str) -> dict:
+    return next(detail for detail in error["details"] if detail["field"] == field)
 
 
 @pytest.mark.asyncio
@@ -137,8 +143,13 @@ async def test_register_endpoint_rejects_invalid_email(
     )
 
     assert response.status_code == 400
-    assert response.json()["success"] is False
-    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+    payload = response.json()
+    assert payload["success"] is False
+    error = payload["error"]
+    assert error["code"] == "VALIDATION_ERROR"
+    assert error["message"] == "Request validation failed."
+    assert _validation_detail(error, "email")["message"]
+    assert "not-an-email" not in str(error["details"])
 
     with Session(test_engine) as session:
         assert session.exec(select(User)).all() == []
@@ -183,8 +194,36 @@ async def test_register_endpoint_rejects_missing_display_name(
     )
 
     assert response.status_code == 400
-    assert response.json()["success"] is False
-    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+    payload = response.json()
+    assert payload["success"] is False
+    error = payload["error"]
+    assert error["code"] == "VALIDATION_ERROR"
+    assert _validation_detail(error, "display_name")["message"]
+
+    with Session(test_engine) as session:
+        assert session.exec(select(User)).all() == []
+
+
+@pytest.mark.asyncio
+async def test_register_endpoint_rejects_short_password_with_field_detail(
+    auth_client: AsyncClient,
+    test_engine,
+) -> None:
+    response = await auth_client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "short-password@example.com",
+            "password": "Short1",
+            "display_name": "Short Password",
+        },
+    )
+
+    assert response.status_code == 400
+    error = response.json()["error"]
+    assert error["code"] == "VALIDATION_ERROR"
+    detail = _validation_detail(error, "password")
+    assert detail["message"]
+    assert "Short1" not in str(error["details"])
 
     with Session(test_engine) as session:
         assert session.exec(select(User)).all() == []
@@ -204,3 +243,48 @@ async def test_register_endpoint_does_not_require_authorization_header(
     )
 
     assert response.status_code == 201
+
+
+@pytest.mark.asyncio
+async def test_register_endpoint_returns_standard_500_for_unexpected_errors(
+    caplog,
+) -> None:
+    def raise_unexpected_error():
+        raise RuntimeError("database exploded")
+
+    app.dependency_overrides[get_registration_service] = raise_unexpected_error
+    transport = ASGITransport(app=app, raise_app_exceptions=False)
+    try:
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as client:
+            with caplog.at_level(logging.ERROR, logger="app.api.errors"):
+                response = await client.post(
+                    "/api/v1/auth/register",
+                    json={
+                        "email": "unexpected@example.com",
+                        "password": "SecurePass1",
+                        "display_name": "Unexpected Error",
+                    },
+                    headers={
+                        "X-Request-ID": "request-500",
+                        "X-Correlation-ID": "correlation-500",
+                    },
+                )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 500
+    assert response.json() == {
+        "success": False,
+        "error": {
+            "code": "UNEXPECTED_ERROR",
+            "message": "An unexpected error occurred.",
+            "request_id": "request-500",
+            "correlation_id": "correlation-500",
+        },
+    }
+    assert "database exploded" not in response.text
+    assert "Unhandled API exception" in caplog.text
+    assert any(record.exc_info for record in caplog.records)

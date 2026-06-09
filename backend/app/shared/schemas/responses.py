@@ -1,6 +1,13 @@
 from pydantic import BaseModel
 
 
+class ValidationErrorDetail(BaseModel):
+    """Sanitized validation issue returned to API clients."""
+
+    field: str
+    message: str
+
+
 class ErrorResponseDetail(BaseModel):
     """Standard API error response detail."""
 
@@ -8,6 +15,7 @@ class ErrorResponseDetail(BaseModel):
     message: str
     request_id: str
     correlation_id: str
+    details: list[ValidationErrorDetail] | None = None
 
 
 class ErrorResponse(BaseModel):
