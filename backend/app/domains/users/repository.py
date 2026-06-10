@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
@@ -17,6 +19,10 @@ class UserRepository:
         """Return a user by normalized email."""
         statement = select(User).where(User.email == email)
         return self._session.exec(statement).first()
+
+    def get_by_id(self, user_id: UUID) -> User | None:
+        """Return a user by ID."""
+        return self._session.get(User, user_id)
 
     def add_user_with_settings(self, user: User, settings: UserSettings) -> None:
         """Persist a user and one-to-one settings row."""

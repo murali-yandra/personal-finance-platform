@@ -23,3 +23,36 @@ class UserRegistrationValidationError(ApplicationError):
             message=message,
             status_code=HTTPStatus.BAD_REQUEST,
         )
+
+
+class InvalidTokenApplicationError(ApplicationError):
+    """Raised when a submitted JWT cannot be validated."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            code="INVALID_TOKEN",
+            message="Invalid authentication token.",
+            status_code=HTTPStatus.UNAUTHORIZED,
+        )
+
+
+class TokenExpiredApplicationError(ApplicationError):
+    """Raised when a submitted JWT has expired."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            code="TOKEN_EXPIRED",
+            message="Your session has expired.",
+            status_code=HTTPStatus.UNAUTHORIZED,
+        )
+
+
+class AccountDisabledError(ApplicationError):
+    """Raised when a disabled account attempts to access the API."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            code="ACCOUNT_DISABLED",
+            message="Account is disabled.",
+            status_code=HTTPStatus.UNAUTHORIZED,
+        )
