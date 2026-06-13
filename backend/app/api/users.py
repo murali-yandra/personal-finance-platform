@@ -4,7 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from app.core.auth import get_current_user
+from app.api.dependencies.auth import get_current_user
 from app.domains.users.models import User
 from app.shared.schemas.responses import SuccessResponse
 

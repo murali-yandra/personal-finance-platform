@@ -21,7 +21,7 @@ from app.domains.users.exceptions import (
 from app.domains.users.models import User
 from app.domains.users.repository import UserRepository
 
-BEARER_PREFIX = "Bearer "
+BEARER_SCHEME = "bearer"
 
 
 def get_current_user(
@@ -44,10 +44,14 @@ def get_current_user(
 
 
 def _extract_bearer_token(authorization: str | None) -> str:
-    if authorization is None or not authorization.startswith(BEARER_PREFIX):
+    if authorization is None:
         raise InvalidTokenApplicationError()
 
-    token = authorization.removeprefix(BEARER_PREFIX).strip()
+    parts = authorization.strip().split(None, 1)
+    if len(parts) != 2 or parts[0].lower() != BEARER_SCHEME:
+        raise InvalidTokenApplicationError()
+
+    token = parts[1].strip()
     if not token:
         raise InvalidTokenApplicationError()
     return token

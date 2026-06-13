@@ -8,7 +8,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
-from app.core.jwt import JwtService
+from app.core.jwt import JwtService, get_jwt_service
 from app.db.session import get_session
 from app.domains.users.models import User
 from app.main import app
@@ -34,6 +34,7 @@ def override_session(test_engine) -> Generator[None, None, None]:
             yield session
 
     app.dependency_overrides[get_session] = get_test_session
+    app.dependency_overrides[get_jwt_service] = lambda: JwtService(JWT_SECRET)
     try:
         yield
     finally:
@@ -142,6 +143,25 @@ async def test_current_user_endpoint_rejects_refresh_token(
 
 
 @pytest.mark.asyncio
+async def test_current_user_endpoint_accepts_case_insensitive_bearer_scheme(
+    auth_client: AsyncClient,
+) -> None:
+    user_id = await _register_user(auth_client)
+    token = JwtService(JWT_SECRET).create_access_token(
+        user_id=user_id,
+        email="murali@example.com",
+    )
+
+    response = await auth_client.get(
+        "/api/v1/users/me",
+        headers={"Authorization": f"bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["id"] == str(user_id)
+
+
+@pytest.mark.asyncio
 async def test_current_user_endpoint_rejects_expired_access_token(
     auth_client: AsyncClient,
 ) -> None:
@@ -182,6 +202,28 @@ async def test_current_user_endpoint_rejects_disabled_user(
     response = await auth_client.get(
         "/api/v1/users/me",
         headers=_authorization_header(user_id, email="disabled@example.com"),
+    )
+
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "ACCOUNT_DISABLED"
+
+
+@pytest.mark.asyncio
+async def test_current_user_endpoint_rejects_soft_deleted_user(
+    auth_client: AsyncClient,
+    test_engine,
+) -> None:
+    user_id = await _register_user(auth_client, email="deleted@example.com")
+    with Session(test_engine) as session:
+        user = session.get(User, user_id)
+        assert user is not None
+        user.deleted_at = datetime(2026, 1, 1)
+        session.add(user)
+        session.commit()
+
+    response = await auth_client.get(
+        "/api/v1/users/me",
+        headers=_authorization_header(user_id, email="deleted@example.com"),
     )
 
     assert response.status_code == 401
