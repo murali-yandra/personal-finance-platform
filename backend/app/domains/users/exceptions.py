@@ -25,6 +25,17 @@ class UserRegistrationValidationError(ApplicationError):
         )
 
 
+class InvalidCredentialsError(ApplicationError):
+    """Raised when login credentials cannot be authenticated."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            code="INVALID_CREDENTIALS",
+            message="Invalid email or password.",
+            status_code=HTTPStatus.UNAUTHORIZED,
+        )
+
+
 class InvalidTokenApplicationError(ApplicationError):
     """Raised when a submitted JWT cannot be validated."""
 

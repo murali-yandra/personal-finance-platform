@@ -1,11 +1,21 @@
+from app.core.jwt import ACCESS_TOKEN_EXPIRE_MINUTES, JwtService
 from app.core.security import PasswordPolicyError, SecurityService
 from app.domains.users.exceptions import (
+    AccountDisabledError,
+    InvalidCredentialsError,
     UserAlreadyExistsError,
     UserRegistrationValidationError,
 )
 from app.domains.users.models import User, UserSettings
 from app.domains.users.repository import UserRepository
-from app.domains.users.schemas import RegisterUserCommand, RegisterUserResult
+from app.domains.users.schemas import (
+    LoginUserCommand,
+    LoginUserResult,
+    RegisterUserCommand,
+    RegisterUserResult,
+)
+
+ACCESS_TOKEN_EXPIRES_IN_SECONDS = ACCESS_TOKEN_EXPIRE_MINUTES * 60
 
 
 class UserRegistrationService:
@@ -52,3 +62,41 @@ class UserRegistrationService:
     @staticmethod
     def _normalize_email(email: str) -> str:
         return email.strip().lower()
+
+
+class UserAuthenticationService:
+    """Application service for user authentication."""
+
+    def __init__(
+        self,
+        repository: UserRepository,
+        security_service: SecurityService,
+        jwt_service: JwtService,
+    ) -> None:
+        self._repository = repository
+        self._security_service = security_service
+        self._jwt_service = jwt_service
+
+    def login_user(self, command: LoginUserCommand) -> LoginUserResult:
+        """Authenticate a user and issue an access and refresh token pair."""
+        email = command.email.strip().lower()
+        user = self._repository.get_by_email(email)
+        if user is None:
+            raise InvalidCredentialsError()
+        if not self._security_service.verify_password(
+            command.password,
+            user.password_hash,
+        ):
+            raise InvalidCredentialsError()
+        if not user.is_active or user.deleted_at is not None:
+            raise AccountDisabledError()
+
+        token_pair = self._jwt_service.create_token_pair(
+            user_id=user.id,
+            email=user.email,
+        )
+        return LoginUserResult(
+            access_token=token_pair.access_token,
+            refresh_token=token_pair.refresh_token,
+            expires_in=ACCESS_TOKEN_EXPIRES_IN_SECONDS,
+        )

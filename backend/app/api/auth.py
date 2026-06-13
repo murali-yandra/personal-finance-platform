@@ -5,11 +5,15 @@ from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from sqlmodel import Session
 
+from app.core.jwt import JwtService, get_jwt_service
 from app.core.security import security_service
 from app.db.session import get_session
 from app.domains.users.repository import UserRepository
-from app.domains.users.schemas import RegisterUserCommand
-from app.domains.users.service import UserRegistrationService
+from app.domains.users.schemas import LoginUserCommand, RegisterUserCommand
+from app.domains.users.service import (
+    UserAuthenticationService,
+    UserRegistrationService,
+)
 from app.shared.schemas.responses import SuccessResponse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -40,6 +44,32 @@ class RegisterUserData(BaseModel):
 RegisterUserResponse = SuccessResponse[RegisterUserData]
 
 
+class LoginUserRequest(BaseModel):
+    """Request body for user login."""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    email: EmailStr
+    password: str = Field(min_length=1, max_length=128)
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, email: EmailStr) -> str:
+        """Normalize emails before they enter the service layer."""
+        return str(email).strip().lower()
+
+
+class LoginUserData(BaseModel):
+    """Response data for successful user login."""
+
+    access_token: str
+    refresh_token: str
+    expires_in: int
+
+
+LoginUserResponse = SuccessResponse[LoginUserData]
+
+
 def get_registration_service(
     session: Annotated[Session, Depends(get_session)],
 ) -> UserRegistrationService:
@@ -47,6 +77,18 @@ def get_registration_service(
     return UserRegistrationService(
         repository=UserRepository(session),
         security_service=security_service,
+    )
+
+
+def get_authentication_service(
+    session: Annotated[Session, Depends(get_session)],
+    jwt_service: Annotated[JwtService, Depends(get_jwt_service)],
+) -> UserAuthenticationService:
+    """Build the authentication service dependency."""
+    return UserAuthenticationService(
+        repository=UserRepository(session),
+        security_service=security_service,
+        jwt_service=jwt_service,
     )
 
 
@@ -71,3 +113,27 @@ def register_user(
         )
     )
     return RegisterUserResponse(data=RegisterUserData(user_id=result.user_id))
+
+
+@router.post("/login", response_model=LoginUserResponse)
+def login_user(
+    request: LoginUserRequest,
+    authentication_service: Annotated[
+        UserAuthenticationService,
+        Depends(get_authentication_service),
+    ],
+) -> LoginUserResponse:
+    """Authenticate a user and return JWT tokens."""
+    result = authentication_service.login_user(
+        LoginUserCommand(
+            email=request.email,
+            password=request.password,
+        )
+    )
+    return LoginUserResponse(
+        data=LoginUserData(
+            access_token=result.access_token,
+            refresh_token=result.refresh_token,
+            expires_in=result.expires_in,
+        )
+    )
