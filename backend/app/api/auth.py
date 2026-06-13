@@ -6,8 +6,19 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from sqlmodel import Session
 
 from app.core.jwt import JwtService, get_jwt_service
+from app.core.refresh_token import (
+    RefreshTokenExpiredError,
+    RefreshTokenInvalidError,
+    RefreshTokenService,
+    get_refresh_token_service,
+)
 from app.core.security import security_service
 from app.db.session import get_session
+from app.domains.users.exceptions import (
+    AccountDisabledError,
+    InvalidTokenApplicationError,
+    TokenExpiredApplicationError,
+)
 from app.domains.users.repository import UserRepository
 from app.domains.users.schemas import LoginUserCommand, RegisterUserCommand
 from app.domains.users.service import (
@@ -68,6 +79,21 @@ class LoginUserData(BaseModel):
 
 
 LoginUserResponse = SuccessResponse[LoginUserData]
+
+
+class RefreshTokenRequest(BaseModel):
+    """Request body for refreshing an access token."""
+
+    refresh_token: str = Field(min_length=1)
+
+
+class RefreshTokenData(BaseModel):
+    """Response data for a refreshed access token."""
+
+    access_token: str
+
+
+RefreshTokenResponse = SuccessResponse[RefreshTokenData]
 
 
 def get_registration_service(
@@ -137,3 +163,29 @@ def login_user(
             expires_in=result.expires_in,
         )
     )
+
+
+@router.post("/refresh", response_model=RefreshTokenResponse)
+def refresh_access_token(
+    request: RefreshTokenRequest,
+    session: Annotated[Session, Depends(get_session)],
+    refresh_token_service: Annotated[
+        RefreshTokenService,
+        Depends(get_refresh_token_service),
+    ],
+) -> RefreshTokenResponse:
+    """Validate a refresh token and issue a new access token."""
+    try:
+        result = refresh_token_service.refresh_access_token(request.refresh_token)
+    except RefreshTokenExpiredError as exc:
+        raise TokenExpiredApplicationError() from exc
+    except RefreshTokenInvalidError as exc:
+        raise InvalidTokenApplicationError() from exc
+
+    user = UserRepository(session).get_by_id(result.user_id)
+    if user is None:
+        raise InvalidTokenApplicationError()
+    if not user.is_active or user.deleted_at is not None:
+        raise AccountDisabledError()
+
+    return RefreshTokenResponse(data=RefreshTokenData(access_token=result.access_token))

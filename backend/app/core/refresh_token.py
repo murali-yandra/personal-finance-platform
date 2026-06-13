@@ -16,6 +16,7 @@ class RefreshTokenResult:
     """Result returned after successfully refreshing an access token."""
 
     access_token: str
+    user_id: UUID
 
 
 class RefreshTokenError(ValueError):
@@ -45,7 +46,7 @@ class RefreshTokenService:
             email=email,
             role=role,
         )
-        return RefreshTokenResult(access_token=access_token)
+        return RefreshTokenResult(access_token=access_token, user_id=user_id)
 
     def _decode_refresh_token(self, refresh_token: str) -> dict[str, object]:
         try:
