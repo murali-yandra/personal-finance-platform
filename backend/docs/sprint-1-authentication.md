@@ -42,6 +42,30 @@ Authorization: Bearer <access_token>
   rejects disabled or soft-deleted users, and issues the new access token from
   the current database user record.
 
+## JWT Usage
+
+Use access tokens for protected API calls:
+
+```http
+Authorization: Bearer <access_token>
+```
+
+Do not send refresh tokens in the `Authorization` header. Refresh tokens are
+accepted only by:
+
+```http
+POST /api/v1/auth/refresh
+Content-Type: application/json
+```
+
+```json
+{
+  "refresh_token": "<jwt-refresh-token>"
+}
+```
+
+Clients should treat both token values as secrets and must not log them.
+
 ## Current User Context
 
 Protected API requests are authenticated before route handling. The middleware:
@@ -59,6 +83,146 @@ Depends(get_current_user)
 ```
 
 This keeps ownership validation explicit at the API/service boundary.
+
+## Authentication Flow Diagrams
+
+### Login
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant API as Auth API
+    participant Service as Auth Service
+    participant DB as PostgreSQL
+    participant JWT as JWT Service
+
+    Client->>API: POST /api/v1/auth/login
+    API->>Service: Authenticate email and password
+    Service->>DB: Load user by email
+    Service->>Service: Verify Argon2id password hash
+    Service->>JWT: Create access and refresh tokens
+    JWT-->>Service: Token pair
+    Service-->>API: Login result
+    API-->>Client: access_token, refresh_token, expires_in
+```
+
+### Protected Request
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Middleware as Auth Middleware
+    participant JWT as JWT Service
+    participant DB as PostgreSQL
+    participant API as Protected API
+
+    Client->>Middleware: Request with Bearer access token
+    Middleware->>JWT: Validate signature, expiry, and token type
+    JWT-->>Middleware: Access token claims
+    Middleware->>DB: Load user by user_id
+    DB-->>Middleware: Active user
+    Middleware->>API: Attach request.state.current_user
+    API-->>Client: Protected response
+```
+
+### Refresh
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant API as Auth API
+    participant Refresh as Refresh Token Service
+    participant JWT as JWT Service
+    participant DB as PostgreSQL
+
+    Client->>API: POST /api/v1/auth/refresh
+    API->>Refresh: Validate refresh token
+    Refresh->>JWT: Decode refresh token
+    JWT-->>Refresh: Refresh claims
+    API->>DB: Load current user
+    DB-->>API: Active user
+    API->>JWT: Create new access token
+    JWT-->>API: Access token
+    API-->>Client: New access token
+```
+
+## API Examples
+
+### Register
+
+```json
+{
+  "email": "murali@example.com",
+  "password": "SecurePass1",
+  "display_name": "Murali Yandra"
+}
+```
+
+```json
+{
+  "success": true,
+  "data": {
+    "user_id": "550e8400-e29b-41d4-a716-446655440000"
+  }
+}
+```
+
+### Login
+
+```json
+{
+  "email": "murali@example.com",
+  "password": "SecurePass1"
+}
+```
+
+```json
+{
+  "success": true,
+  "data": {
+    "access_token": "<jwt-access-token>",
+    "refresh_token": "<jwt-refresh-token>",
+    "expires_in": 900
+  }
+}
+```
+
+### Current User
+
+```http
+GET /api/v1/users/me
+Authorization: Bearer <jwt-access-token>
+```
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "email": "murali@example.com",
+    "display_name": "Murali Yandra",
+    "timezone": "Asia/Kolkata",
+    "default_currency": "INR"
+  }
+}
+```
+
+### Refresh
+
+```json
+{
+  "refresh_token": "<jwt-refresh-token>"
+}
+```
+
+```json
+{
+  "success": true,
+  "data": {
+    "access_token": "<new-jwt-access-token>"
+  }
+}
+```
 
 ## Error Codes
 
@@ -85,3 +249,6 @@ Run the full backend suite:
 ```powershell
 uv run pytest
 ```
+
+The API examples above are validated against the same response shapes covered by
+the authentication endpoint and middleware tests.

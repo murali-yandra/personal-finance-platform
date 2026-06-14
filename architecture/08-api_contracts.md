@@ -16,7 +16,7 @@ Authentication: JWT
 
 Content-Type: application/json
 
-Last Updated: 2026-06-02
+Last Updated: 2026-06-14
 
 ---
 
@@ -74,12 +74,23 @@ Content-Type: application/json
 
 ## 2.3 JWT Authentication
 
-All endpoints require JWT except:
+All endpoints require JWT access-token authentication except:
 
 ```text
-POST /auth/register
-POST /auth/login
 GET  /health
+GET  /api/v1/health
+POST /api/v1/auth/register
+POST /api/v1/auth/login
+POST /api/v1/auth/refresh
+```
+
+`POST /api/v1/auth/refresh` is public to access-token middleware but must submit
+a valid refresh token in the JSON request body.
+
+Authenticated requests must include:
+
+```http
+Authorization: Bearer <access_token>
 ```
 
 ---
@@ -105,10 +116,11 @@ All successful responses must follow:
 ```json
 {
   "success": true,
-  "data": {},
-  "meta": {}
+  "data": {}
 }
 ```
+
+List endpoints that support pagination must also include `meta`.
 
 ---
 
@@ -121,7 +133,9 @@ All failures must follow:
   "success": false,
   "error": {
     "code": "VALIDATION_ERROR",
-    "message": "Amount must be greater than zero"
+    "message": "Request validation failed.",
+    "request_id": "request-uuid",
+    "correlation_id": "correlation-uuid"
   }
 }
 ```
@@ -166,7 +180,7 @@ Response:
 {
   "success": true,
   "data": {
-    "user_id": "uuid"
+    "user_id": "550e8400-e29b-41d4-a716-446655440000"
   }
 }
 ```
@@ -202,12 +216,15 @@ Response:
 {
   "success": true,
   "data": {
-    "access_token": "jwt",
-    "refresh_token": "jwt",
-    "expires_in": 3600
+    "access_token": "<jwt-access-token>",
+    "refresh_token": "<jwt-refresh-token>",
+    "expires_in": 900
   }
 }
 ```
+
+`expires_in` is expressed in seconds and currently represents the ADR-009
+15-minute access token lifetime.
 
 ---
 
@@ -233,10 +250,13 @@ Response:
 {
   "success": true,
   "data": {
-    "access_token": "new_jwt"
+    "access_token": "<new-jwt-access-token>"
   }
 }
 ```
+
+Refresh-token exchange validates token signature, expiration, token type, and
+current user status before returning a new access token.
 
 ---
 
@@ -256,6 +276,7 @@ Endpoint:
 
 ```http
 GET /api/v1/users/me
+Authorization: Bearer <access_token>
 ```
 
 Response:
@@ -264,7 +285,7 @@ Response:
 {
   "success": true,
   "data": {
-    "id": "uuid",
+    "id": "550e8400-e29b-41d4-a716-446655440000",
     "email": "murali@example.com",
     "display_name": "Murali Yandra",
     "timezone": "Asia/Kolkata",
@@ -289,6 +310,112 @@ Request:
 {
   "display_name": "Murali",
   "timezone": "Asia/Kolkata"
+}
+```
+
+---
+
+# 4.3 Authentication Example Flow
+
+The following example sequence is validated by the Sprint 1 authentication test
+suite.
+
+## Register
+
+```http
+POST /api/v1/auth/register
+Content-Type: application/json
+```
+
+```json
+{
+  "email": "murali@example.com",
+  "password": "SecurePass1",
+  "display_name": "Murali Yandra"
+}
+```
+
+Expected response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "user_id": "550e8400-e29b-41d4-a716-446655440000"
+  }
+}
+```
+
+## Login
+
+```http
+POST /api/v1/auth/login
+Content-Type: application/json
+```
+
+```json
+{
+  "email": "murali@example.com",
+  "password": "SecurePass1"
+}
+```
+
+Expected response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "access_token": "<jwt-access-token>",
+    "refresh_token": "<jwt-refresh-token>",
+    "expires_in": 900
+  }
+}
+```
+
+## Call Current User
+
+```http
+GET /api/v1/users/me
+Authorization: Bearer <jwt-access-token>
+```
+
+Expected response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "email": "murali@example.com",
+    "display_name": "Murali Yandra",
+    "timezone": "Asia/Kolkata",
+    "default_currency": "INR"
+  }
+}
+```
+
+## Refresh Access Token
+
+```http
+POST /api/v1/auth/refresh
+Content-Type: application/json
+```
+
+```json
+{
+  "refresh_token": "<jwt-refresh-token>"
+}
+```
+
+Expected response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "access_token": "<new-jwt-access-token>"
+  }
 }
 ```
 

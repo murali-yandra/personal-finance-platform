@@ -14,7 +14,7 @@ Authentication Method: JWT
 
 Password Hashing: Argon2id
 
-Last Updated: 2026-06-02
+Last Updated: 2026-06-14
 
 ---
 
@@ -266,7 +266,7 @@ API Authentication
 Lifetime:
 
 ```text
-60 Minutes
+15 Minutes
 ```
 
 ---
@@ -294,10 +294,13 @@ Lifetime:
 ```json
 {
   "sub": "user_uuid",
+  "user_id": "user_uuid",
   "email": "user@example.com",
+  "role": "USER",
   "token_type": "access",
   "iat": 1717000000,
-  "exp": 1717003600
+  "exp": 1717000900,
+  "jti": "token_uuid"
 }
 ```
 
@@ -308,9 +311,13 @@ Lifetime:
 ```json
 {
   "sub": "user_uuid",
+  "user_id": "user_uuid",
+  "email": "user@example.com",
+  "role": "USER",
   "token_type": "refresh",
   "iat": 1717000000,
-  "exp": 1719592000
+  "exp": 1719592000,
+  "jti": "token_uuid"
 }
 ```
 
@@ -372,6 +379,27 @@ Load User
 Attach Current User
 ↓
 Continue
+```
+
+---
+
+## Public Paths
+
+The following paths do not require an access token:
+
+```text
+GET  /health
+GET  /api/v1/health
+POST /api/v1/auth/register
+POST /api/v1/auth/login
+POST /api/v1/auth/refresh
+```
+
+`POST /api/v1/auth/refresh` must still submit a valid refresh token in the
+request body. All other `/api/v1` paths require:
+
+```http
+Authorization: Bearer <access_token>
 ```
 
 ---
@@ -474,7 +502,12 @@ Responsibilities:
 * Validate Signature
 * Validate Expiry
 * Load User
+* Reject missing, disabled, or soft-deleted users
 * Return User Context
+
+When authentication middleware already attached a valid user to request state,
+the dependency may reuse that context but must still enforce account-status
+checks.
 
 ---
 
@@ -748,6 +781,10 @@ Refresh Token Submitted
 ↓
 Validate Refresh Token
 ↓
+Load Current User
+↓
+Reject Disabled Or Soft Deleted User
+↓
 Generate New Access Token
 ↓
 Return Token
@@ -762,11 +799,15 @@ sequenceDiagram
     participant User
     participant API
     participant Auth
+    participant DB
     participant JWT
 
     User->>API: Refresh Token
     API->>Auth: Validate Refresh Token
-    Auth->>JWT: Generate New Access Token
+    Auth->>JWT: Decode and validate refresh token
+    Auth->>DB: Load current user
+    Auth->>Auth: Validate active and not deleted
+    Auth->>JWT: Generate new access token
     JWT-->>API: Access Token
     API-->>User: New Access Token
 ```

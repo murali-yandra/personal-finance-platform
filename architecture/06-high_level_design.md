@@ -745,6 +745,7 @@ All APIs require JWT except:
 
 * Register
 * Login
+* Refresh Token Exchange
 * Health Check
 
 ---

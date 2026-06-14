@@ -16,7 +16,7 @@ Database: PostgreSQL
 
 Authentication: JWT
 
-Last Updated: 2026-06-02
+Last Updated: 2026-06-14
 
 ---
 
@@ -297,7 +297,7 @@ Future SaaS Requirement.
 Lifetime:
 
 ```text
-60 Minutes
+15 Minutes
 ```
 
 ---
@@ -319,8 +319,13 @@ Required:
 ```json
 {
   "sub": "user_id",
+  "user_id": "user_id",
   "email": "user_email",
-  "exp": 123456789
+  "role": "USER",
+  "token_type": "access",
+  "iat": 123456000,
+  "exp": 123456900,
+  "jti": "token_uuid"
 }
 ```
 

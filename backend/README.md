@@ -24,15 +24,34 @@ SMS ingestion, Telegram, AI, and financial business logic are not implemented ye
 The local runtime file is `.env`. It is ignored by git and has been populated for this workspace. If it ever needs to be recreated:
 
 ```powershell
+cd E:\ledger-ai\backend
 Copy-Item .env.example .env
 ```
 
 Replace every placeholder value in `.env` with environment-specific secrets and connection values. `.env.example` is documentation only and must not be used as a runtime secrets file.
 
+Install `uv` if the command is not available:
+
 ```powershell
-cd backend
+python -m pip install --user uv
+```
+
+Install dependencies:
+
+```powershell
 python -m uv sync --extra dev
-uv run uvicorn app.main:app --reload
+```
+
+Apply migrations when PostgreSQL is running:
+
+```powershell
+python -m uv run alembic upgrade head
+```
+
+Start the backend:
+
+```powershell
+python -m uv run uvicorn app.main:app --reload
 ```
 
 Health check:
@@ -58,25 +77,90 @@ Authorization: Bearer <access_token>
 
 Public paths are limited to health, registration, login, and refresh-token exchange.
 
+## Validated Authentication Example
+
+With the backend running locally, this PowerShell flow registers a user, logs in,
+calls the current-user endpoint with the access token, and refreshes the access
+token with the refresh token.
+
+```powershell
+$baseUrl = "http://localhost:8000"
+$email = "murali+$([guid]::NewGuid().ToString('N'))@example.com"
+$password = "SecurePass1"
+
+$registerBody = @{
+    email = $email
+    password = $password
+    display_name = "Murali Yandra"
+} | ConvertTo-Json
+
+$register = Invoke-RestMethod `
+    -Method Post `
+    -Uri "$baseUrl/api/v1/auth/register" `
+    -ContentType "application/json" `
+    -Body $registerBody
+
+$loginBody = @{
+    email = $email
+    password = $password
+} | ConvertTo-Json
+
+$login = Invoke-RestMethod `
+    -Method Post `
+    -Uri "$baseUrl/api/v1/auth/login" `
+    -ContentType "application/json" `
+    -Body $loginBody
+
+$authHeaders = @{
+    Authorization = "Bearer $($login.data.access_token)"
+}
+
+$currentUser = Invoke-RestMethod `
+    -Method Get `
+    -Uri "$baseUrl/api/v1/users/me" `
+    -Headers $authHeaders
+
+$refreshBody = @{
+    refresh_token = $login.data.refresh_token
+} | ConvertTo-Json
+
+$refresh = Invoke-RestMethod `
+    -Method Post `
+    -Uri "$baseUrl/api/v1/auth/refresh" `
+    -ContentType "application/json" `
+    -Body $refreshBody
+
+$register
+$currentUser
+$refresh
+```
+
+Expected behavior:
+
+- Register returns `success = true` and a `user_id`.
+- Login returns `access_token`, `refresh_token`, and `expires_in = 900`.
+- Current user returns the authenticated user's profile.
+- Refresh returns a new `access_token`.
+
 ## Tests
 
 ```powershell
 cd backend
-uv run pytest
+python -m uv run pytest
 ```
 
 Authentication-focused tests:
 
 ```powershell
 cd backend
-uv run pytest tests\test_auth_middleware.py tests\test_auth_login_endpoint.py tests\test_auth_refresh_endpoint.py tests\test_current_user_endpoint.py
+python -m uv run pytest tests\test_auth_middleware.py tests\test_auth_login_endpoint.py tests\test_auth_refresh_endpoint.py tests\test_current_user_endpoint.py
 ```
 
 ## Alembic
 
 ```powershell
 cd backend
-uv run alembic upgrade head
+python -m uv run alembic upgrade head
 ```
 
 Authentication migrations currently create the `users` and `user_settings` tables.

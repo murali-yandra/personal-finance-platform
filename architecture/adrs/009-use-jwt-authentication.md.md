@@ -397,6 +397,7 @@ role
 iat
 exp
 jti
+token_type
 ```
 
 ---
@@ -405,12 +406,14 @@ jti
 
 ```json
 {
-  "sub": "user@example.com",
+  "sub": "user_uuid",
   "user_id": "uuid",
+  "email": "user@example.com",
   "role": "USER",
   "iat": 1717000000,
   "exp": 1717000900,
-  "jti": "uuid"
+  "jti": "uuid",
+  "token_type": "access"
 }
 ```
 
@@ -534,9 +537,12 @@ Examples:
 /auth/login
 
 /auth/register
+
+/auth/refresh
 ```
 
-Do not require JWT.
+Do not require an access token. Refresh requests must submit a valid refresh
+token in the request body.
 
 ---
 

@@ -753,15 +753,17 @@ sequenceDiagram
 
 ---
 
-# 15. Authentication Flow
+# 15. Authentication Flows
 
 ## 15.1 Description
 
-Users authenticate using email and password. API access requires JWT.
+Users authenticate using email and password. API access requires a JWT access
+token. Refresh-token exchange uses a refresh token in the request body and then
+validates the current database user before issuing a new access token.
 
 ---
 
-## 15.2 Text Flow
+## 15.2 Login Text Flow
 
 ```text
 User Login
@@ -779,7 +781,7 @@ Return Tokens
 
 ---
 
-## 15.3 Mermaid Sequence Diagram
+## 15.3 Login Sequence Diagram
 
 ```mermaid
 sequenceDiagram
@@ -789,13 +791,79 @@ sequenceDiagram
     participant DB as PostgreSQL
     participant JWT as JWT Service
 
-    User->>API: POST /auth/login
+    User->>API: POST /api/v1/auth/login
     API->>Auth: Validate credentials
     Auth->>DB: Load user by email
     Auth->>Auth: Verify Argon2 password hash
     Auth->>JWT: Generate access and refresh tokens
     JWT-->>API: Tokens
     API-->>User: Return tokens
+```
+
+---
+
+## 15.4 Protected Request Middleware Flow
+
+```text
+Client Request
+    ↓
+Authentication Middleware
+    ↓
+Extract Bearer Access Token
+    ↓
+Validate Signature, Expiry, And Token Type
+    ↓
+Load Current User
+    ↓
+Reject Missing, Disabled, Or Soft Deleted User
+    ↓
+Attach User To Request State
+    ↓
+Route Handler Uses get_current_user
+```
+
+---
+
+## 15.5 Protected Request Sequence Diagram
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Middleware as Auth Middleware
+    participant JWT as JWT Service
+    participant DB as PostgreSQL
+    participant API as Protected API
+
+    Client->>Middleware: GET /api/v1/users/me + Bearer access token
+    Middleware->>JWT: Validate access token
+    JWT-->>Middleware: Claims
+    Middleware->>DB: Load user by user_id
+    DB-->>Middleware: Active user
+    Middleware->>API: Attach current_user and continue
+    API-->>Client: Current user response
+```
+
+---
+
+## 15.6 Refresh Token Sequence Diagram
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant API as Auth API
+    participant Auth as Refresh Token Service
+    participant JWT as JWT Service
+    participant DB as PostgreSQL
+
+    Client->>API: POST /api/v1/auth/refresh
+    API->>Auth: Validate refresh token
+    Auth->>JWT: Decode refresh token
+    JWT-->>Auth: Refresh claims
+    API->>DB: Load current user
+    DB-->>API: Active user
+    API->>JWT: Issue new access token
+    JWT-->>API: Access token
+    API-->>Client: New access token
 ```
 
 ---
