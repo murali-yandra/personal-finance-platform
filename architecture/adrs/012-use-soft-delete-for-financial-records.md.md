@@ -284,6 +284,18 @@ user_feedback
 ai_suggestions
 ```
 
+Account exception:
+
+```text
+accounts use status = ARCHIVED for Sprint 2 account archive workflows.
+```
+
+This account-specific archive status replaces generic `is_deleted` metadata for
+Sprint 2 account implementation. The account row remains stored and recoverable,
+and normal user workflows must treat `ARCHIVED` accounts as removed from active
+use. Generic account soft-delete metadata may be added later only through an
+explicit migration and architecture update.
+
 ---
 
 # Tables NOT Using Soft Delete
@@ -335,6 +347,16 @@ Action:
 ```text
 Account Archived
 ```
+
+Sprint 2 implementation uses the account-specific archive workflow:
+
+```text
+accounts.status = ARCHIVED
+```
+
+This is the account-domain equivalent of soft deletion for normal user
+workflows. Additional generic soft-delete metadata for accounts may be added
+only if a later migration explicitly requires it.
 
 Not:
 

@@ -505,8 +505,12 @@ CREDIT_CARD
 
 CASH
 
-WALLET
+INVESTMENT
+
+LOAN
 ```
+
+Cash wallets must use `CASH`. `WALLET` is not a separate Sprint 2 account type.
 
 ---
 
