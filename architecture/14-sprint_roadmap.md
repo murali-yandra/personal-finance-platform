@@ -347,8 +347,58 @@ CREDIT_CARD
 
 CASH
 
-WALLET
+INVESTMENT
+
+LOAN
 ```
+
+---
+
+## Sprint 2 Architecture Decisions
+
+### Account Type Source Of Truth
+
+Sprint 2 uses the account types defined in `04-database_schema.md`,
+`05-data_dictionary.md`, and `06-high_level_design.md`:
+
+```text
+BANK
+CREDIT_CARD
+CASH
+INVESTMENT
+LOAN
+```
+
+`WALLET` is not a separate account type in Sprint 2. Cash wallets must be
+represented as `CASH`.
+
+### Archive Behavior
+
+Archiving an account must not physically delete the record. Sprint 2 account
+archive behavior is:
+
+```text
+status = ARCHIVED
+```
+
+Normal list APIs should return non-archived user accounts by default, including
+`PENDING`, `ACTIVE`, and `DISABLED` records. Archived accounts may be returned
+only when an explicit future filter supports that behavior.
+
+### Audit Behavior
+
+`audit_log` persistence is delivered in Sprint 3 with the transaction/audit
+work. Sprint 2 account create, update, and archive services must keep a clear
+internal event hook for future audit integration using the approved ADR-007
+events:
+
+```text
+AccountCreated
+AccountUpdated
+AccountArchived
+```
+
+Sprint 2 must not create the `audit_log` table ahead of the roadmap.
 
 ---
 

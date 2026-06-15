@@ -445,14 +445,73 @@ Base Path:
 /api/v1/accounts
 ```
 
+Account type source of truth:
+
+```text
+BANK
+CREDIT_CARD
+CASH
+INVESTMENT
+LOAN
+```
+
+`WALLET` is not a separate account type. Cash wallets must use `CASH`.
+
 ---
 
-# 7.1 Get Accounts
+# 7.1 Create Account
+
+Endpoint:
+
+```http
+POST /api/v1/accounts
+Authorization: Bearer <access_token>
+```
+
+Request:
+
+```json
+{
+  "account_name": "Salary Account",
+  "account_type": "BANK",
+  "bank_name": "ICICI",
+  "last_four_digits": "0452",
+  "currency": "INR",
+  "opening_balance": "0.00"
+}
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "account_name": "Salary Account",
+    "account_type": "BANK",
+    "bank_name": "ICICI",
+    "last_four_digits": "0452",
+    "currency": "INR",
+    "opening_balance": "0.00",
+    "estimated_balance": "0.00",
+    "status": "ACTIVE"
+  }
+}
+```
+
+Manual account creation returns `ACTIVE` by default. Automatically discovered
+unknown accounts remain `PENDING` until the user confirms account details.
+
+---
+
+# 7.2 Get Accounts
 
 Endpoint:
 
 ```http
 GET /api/v1/accounts
+Authorization: Bearer <access_token>
 ```
 
 Response:
@@ -462,33 +521,39 @@ Response:
   "success": true,
   "data": [
     {
-      "id": "uuid",
+      "id": "550e8400-e29b-41d4-a716-446655440000",
       "account_name": "Salary Account",
       "account_type": "BANK",
-      "estimated_balance": 25000
+      "estimated_balance": "25000.00",
+      "status": "ACTIVE"
     }
   ]
 }
 ```
 
+Default list behavior returns non-archived accounts, including `PENDING`,
+`ACTIVE`, and `DISABLED`. `ARCHIVED` accounts require an explicit future filter.
+
 ---
 
-# 7.2 Get Account
+# 7.3 Get Account
 
 Endpoint:
 
 ```http
 GET /api/v1/accounts/{account_id}
+Authorization: Bearer <access_token>
 ```
 
 ---
 
-# 7.3 Update Account
+# 7.4 Update Account
 
 Endpoint:
 
 ```http
 PATCH /api/v1/accounts/{account_id}
+Authorization: Bearer <access_token>
 ```
 
 Request:
@@ -503,18 +568,70 @@ Request:
 Audit Required:
 
 ```text
-Yes
+Deferred
 ```
+
+Sprint 2 must prepare an `AccountUpdated` internal event hook for future audit
+integration, but `audit_log` persistence starts in Sprint 3.
 
 ---
 
-# 7.4 Reconcile Account Balance
+# 7.5 Archive Account
+
+Endpoint:
+
+```http
+DELETE /api/v1/accounts/{account_id}
+Authorization: Bearer <access_token>
+```
+
+Behavior:
+
+```text
+Set status = ARCHIVED
+```
+
+Physical deletion is prohibited for account records.
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "status": "ARCHIVED"
+  }
+}
+```
+
+Audit Required:
+
+```text
+Deferred
+```
+
+Sprint 2 must prepare an `AccountArchived` internal event hook for future audit
+integration, but `audit_log` persistence starts in Sprint 3.
+
+---
+
+# 7.6 Reconcile Account Balance
 
 Endpoint:
 
 ```http
 POST /api/v1/accounts/{account_id}/reconcile
 ```
+
+Sprint:
+
+```text
+Sprint 10
+```
+
+This endpoint is documented for the balance engine roadmap and must not be
+implemented in Sprint 2.
 
 Request:
 

@@ -413,6 +413,12 @@ Rules:
 * Unknown accounts become PENDING.
 * User must name pending accounts.
 * Account ownership must always be enforced.
+* Account types are BANK, CREDIT_CARD, CASH, INVESTMENT, and LOAN.
+* Cash wallets use the CASH account type.
+* Account archive sets status to ARCHIVED and never hard deletes the row.
+* Account update/archive audit persistence is deferred until Sprint 3; Sprint 2
+  keeps AccountCreated, AccountUpdated, and AccountArchived event hooks ready for
+  the audit module.
 
 ---
 

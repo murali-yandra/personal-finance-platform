@@ -164,6 +164,9 @@ INVESTMENT
 LOAN
 ```
 
+`CASH` represents physical cash and cash-wallet style accounts. `WALLET` is not
+a separate schema value.
+
 ---
 
 ## 3.2 account_status
@@ -419,6 +422,20 @@ CREATE INDEX idx_accounts_user_id ON accounts(user_id);
 CREATE INDEX idx_accounts_status ON accounts(status);
 CREATE INDEX idx_accounts_bank_last_four ON accounts(bank_name, last_four_digits);
 ```
+
+Archive behavior:
+
+```sql
+UPDATE accounts
+SET status = 'ARCHIVED'
+WHERE id = :account_id
+AND user_id = :user_id;
+```
+
+Account rows must not be physically deleted during normal application workflows.
+`audit_log` persistence for account changes starts with the Sprint 3 audit work;
+Sprint 2 account services must keep clear internal event hooks for
+`AccountCreated`, `AccountUpdated`, and `AccountArchived`.
 
 ---
 

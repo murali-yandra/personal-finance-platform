@@ -464,6 +464,9 @@ INVESTMENT
 LOAN
 ```
 
+`CASH` covers physical cash and cash-wallet style accounts. `WALLET` is not a
+separate account type.
+
 ---
 
 ## bank_name
@@ -564,6 +567,9 @@ ACTIVE
 ARCHIVED
 DISABLED
 ```
+
+`ARCHIVED` means the account is hidden from normal active-account workflows but
+kept for historical traceability. Accounts must not be hard deleted.
 
 ---
 
