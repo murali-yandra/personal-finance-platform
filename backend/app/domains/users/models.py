@@ -1,8 +1,12 @@
 from datetime import datetime
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 from sqlalchemy import Column, DateTime, Index, Text, UniqueConstraint, func
 from sqlmodel import Field, Relationship, SQLModel
+
+if TYPE_CHECKING:
+    from app.domains.accounts.models import Account
 
 
 class User(SQLModel, table=True):
@@ -46,6 +50,7 @@ class User(SQLModel, table=True):
         back_populates="user",
         sa_relationship_kwargs={"uselist": False},
     )
+    accounts: list["Account"] = Relationship(back_populates="user")
 
 
 class UserSettings(SQLModel, table=True):
@@ -81,3 +86,6 @@ class UserSettings(SQLModel, table=True):
     )
 
     user: User = Relationship(back_populates="settings")
+
+
+from app.domains.accounts.models import Account  # noqa: E402,F401
