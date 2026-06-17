@@ -8,7 +8,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
-from app.core.jwt import JwtService, TokenType
+from app.core.jwt import JwtService, TokenType, get_jwt_service
 from app.core.refresh_token import RefreshTokenService, get_refresh_token_service
 from app.db.session import get_session
 from app.domains.users.models import User
@@ -36,6 +36,7 @@ def override_dependencies(test_engine) -> Generator[None, None, None]:
             yield session
 
     app.dependency_overrides[get_session] = get_test_session
+    app.dependency_overrides[get_jwt_service] = lambda: JwtService(JWT_SECRET)
     app.dependency_overrides[get_refresh_token_service] = lambda: RefreshTokenService(
         JwtService(JWT_SECRET)
     )
@@ -105,6 +106,34 @@ async def test_refresh_endpoint_returns_new_access_token(
     )
     assert claims["user_id"] == str(user_id)
     assert claims["email"] == USER_EMAIL
+
+
+@pytest.mark.asyncio
+async def test_refresh_endpoint_uses_current_database_email_for_access_token(
+    auth_client: AsyncClient,
+    test_engine,
+) -> None:
+    jwt_service = JwtService(JWT_SECRET)
+    user_id = uuid4()
+    with Session(test_engine) as session:
+        _create_user(session, user_id, email="current@example.com")
+    refresh_token = jwt_service.create_refresh_token(
+        user_id=user_id,
+        email="old@example.com",
+    )
+
+    response = await auth_client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": refresh_token},
+    )
+
+    assert response.status_code == 200
+    claims = jwt_service.decode_token(
+        response.json()["data"]["access_token"],
+        expected_token_type=TokenType.ACCESS,
+    )
+    assert claims["user_id"] == str(user_id)
+    assert claims["email"] == "current@example.com"
 
 
 @pytest.mark.asyncio
@@ -185,6 +214,34 @@ async def test_refresh_endpoint_rejects_disabled_user(
     user_id = uuid4()
     with Session(test_engine) as session:
         _create_user(session, user_id, is_active=False)
+    refresh_token = jwt_service.create_refresh_token(
+        user_id=user_id,
+        email=USER_EMAIL,
+    )
+
+    response = await auth_client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": refresh_token},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "ACCOUNT_DISABLED"
+
+
+@pytest.mark.asyncio
+async def test_refresh_endpoint_rejects_soft_deleted_user(
+    auth_client: AsyncClient,
+    test_engine,
+) -> None:
+    jwt_service = JwtService(JWT_SECRET)
+    user_id = uuid4()
+    with Session(test_engine) as session:
+        _create_user(session, user_id)
+        user = session.get(User, user_id)
+        assert user is not None
+        user.deleted_at = datetime(2026, 1, 1)
+        session.add(user)
+        session.commit()
     refresh_token = jwt_service.create_refresh_token(
         user_id=user_id,
         email=USER_EMAIL,
