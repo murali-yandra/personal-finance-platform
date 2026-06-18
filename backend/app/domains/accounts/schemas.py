@@ -2,7 +2,14 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, Self
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_serializer,
+    field_validator,
+    model_validator,
+)
 
 from app.domains.accounts.enums import AccountStatus, AccountType
 from app.domains.accounts.models import Account
@@ -91,6 +98,13 @@ class UpdateAccountRequest(BaseModel):
             return None
         return validate_money(value)
 
+    @model_validator(mode="after")
+    def require_at_least_one_field(self) -> Self:
+        """Reject no-op update requests."""
+        if not self.model_fields_set:
+            raise ValueError("At least one account field must be provided.")
+        return self
+
 
 class AccountResponseData(BaseModel):
     """Account data returned inside the standard success envelope."""
@@ -138,8 +152,11 @@ def validate_money(value: Any) -> Decimal:
     if isinstance(value, Decimal):
         decimal_value = value
     elif isinstance(value, str):
+        money_text = value.strip()
+        if "e" in money_text.lower():
+            raise ValueError("Money value must use plain decimal notation.")
         try:
-            decimal_value = Decimal(value.strip())
+            decimal_value = Decimal(money_text)
         except InvalidOperation as exc:
             raise ValueError("Money value must be a valid decimal string.") from exc
     else:
@@ -153,8 +170,13 @@ def validate_money(value: Any) -> Decimal:
     if decimal_places > MAX_MONEY_DECIMAL_PLACES:
         raise ValueError("Money value must have no more than two decimal places.")
 
-    integer_digits = max(len(decimal_value.as_tuple().digits) - decimal_places, 0)
+    integer_digits = decimal_value.adjusted() + 1
+    if decimal_value.copy_abs() < 1:
+        integer_digits = 0
     if integer_digits > MAX_MONEY_INTEGER_DIGITS:
         raise ValueError("Money value exceeds NUMERIC(18,2) precision.")
 
-    return decimal_value.quantize(MONEY_QUANTIZER)
+    try:
+        return decimal_value.quantize(MONEY_QUANTIZER)
+    except InvalidOperation as exc:
+        raise ValueError("Money value exceeds NUMERIC(18,2) precision.") from exc

@@ -56,7 +56,19 @@ def test_create_account_request_rejects_invalid_enum_values() -> None:
     assert exc_info.value.errors()[0]["loc"] == ("account_type",)
 
 
-@pytest.mark.parametrize("invalid_money", [120.50, 120, "12.345", "not-money"])
+@pytest.mark.parametrize(
+    "invalid_money",
+    [
+        120.50,
+        120,
+        "12.345",
+        "not-money",
+        "1E+16",
+        "1E+17",
+        "1E+100",
+        "10000000000000000.00",
+    ],
+)
 def test_create_account_request_rejects_invalid_money_values(
     invalid_money: object,
 ) -> None:
@@ -69,6 +81,16 @@ def test_create_account_request_rejects_invalid_money_values(
 
     error_text = str(exc_info.value)
     assert "opening_balance" in error_text
+
+
+def test_create_account_request_accepts_max_numeric_18_2_money_value() -> None:
+    request = CreateAccountRequest(
+        account_name="Large Balance Account",
+        account_type="BANK",
+        opening_balance="9999999999999999.99",
+    )
+
+    assert request.opening_balance == Decimal("9999999999999999.99")
 
 
 @pytest.mark.parametrize("invalid_currency", ["IN", "INR1", "12A"])
@@ -84,6 +106,21 @@ def test_create_account_request_rejects_invalid_currency(
         )
 
     assert exc_info.value.errors()[0]["loc"] == ("currency",)
+
+
+@pytest.mark.parametrize("currency", ["INR", "usd", " Eur "])
+def test_create_account_request_accepts_three_letter_currency_codes(
+    currency: str,
+) -> None:
+    request = CreateAccountRequest(
+        account_name="Multi Currency Account",
+        account_type="BANK",
+        currency=currency,
+        opening_balance="0.00",
+    )
+
+    assert len(request.currency) == 3
+    assert request.currency == currency.strip().upper()
 
 
 def test_create_account_request_rejects_non_digit_last_four_digits() -> None:
@@ -115,6 +152,13 @@ def test_update_account_request_rejects_invalid_status() -> None:
         UpdateAccountRequest(status="DELETED")
 
     assert exc_info.value.errors()[0]["loc"] == ("status",)
+
+
+def test_update_account_request_rejects_empty_payload() -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        UpdateAccountRequest()
+
+    assert "At least one account field must be provided" in str(exc_info.value)
 
 
 def test_account_response_serializes_money_as_strings_inside_success_envelope() -> None:
