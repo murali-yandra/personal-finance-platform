@@ -169,7 +169,6 @@ def login_user(
 def refresh_access_token(
     request: RefreshTokenRequest,
     session: Annotated[Session, Depends(get_session)],
-    jwt_service: Annotated[JwtService, Depends(get_jwt_service)],
     refresh_token_service: Annotated[
         RefreshTokenService,
         Depends(get_refresh_token_service),
@@ -189,9 +188,4 @@ def refresh_access_token(
     if not user.is_active or user.deleted_at is not None:
         raise AccountDisabledError()
 
-    access_token = jwt_service.create_access_token(
-        user_id=user.id,
-        email=user.email,
-        role=result.role,
-    )
-    return RefreshTokenResponse(data=RefreshTokenData(access_token=access_token))
+    return RefreshTokenResponse(data=RefreshTokenData(access_token=result.access_token))
