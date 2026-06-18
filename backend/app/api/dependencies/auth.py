@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import Depends, Header, Request
+from fastapi import Depends, Header
 from sqlmodel import Session
 
 from app.core.jwt import (
@@ -25,18 +25,11 @@ BEARER_SCHEME = "bearer"
 
 
 def get_current_user(
-    request: Request,
     session: Annotated[Session, Depends(get_session)],
     jwt_service: Annotated[JwtService, Depends(get_jwt_service)],
     authorization: Annotated[str | None, Header()] = None,
 ) -> User:
     """Return the authenticated user for a valid JWT access token."""
-    current_user = getattr(request.state, "current_user", None)
-    if isinstance(current_user, User):
-        if not current_user.is_active or current_user.deleted_at is not None:
-            raise AccountDisabledError()
-        return current_user
-
     token = _extract_bearer_token(authorization)
     claims = _decode_access_token(jwt_service, token)
     user_id = _extract_user_id(claims)
@@ -47,8 +40,6 @@ def get_current_user(
     if not user.is_active or user.deleted_at is not None:
         raise AccountDisabledError()
 
-    request.state.current_user = user
-    request.state.current_user_id = user.id
     return user
 
 
@@ -56,7 +47,7 @@ def _extract_bearer_token(authorization: str | None) -> str:
     if authorization is None:
         raise InvalidTokenApplicationError()
 
-    parts = authorization.strip().split()
+    parts = authorization.strip().split(None, 1)
     if len(parts) != 2 or parts[0].lower() != BEARER_SCHEME:
         raise InvalidTokenApplicationError()
 
