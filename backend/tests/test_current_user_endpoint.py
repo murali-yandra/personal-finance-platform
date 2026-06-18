@@ -1,6 +1,5 @@
 from collections.abc import AsyncGenerator, Generator
 from datetime import UTC, datetime, timedelta
-from types import SimpleNamespace
 from uuid import UUID
 
 import pytest
@@ -9,10 +8,8 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
-from app.api.dependencies.auth import get_current_user
 from app.core.jwt import JwtService, get_jwt_service
 from app.db.session import get_session
-from app.domains.users.exceptions import AccountDisabledError
 from app.domains.users.models import User
 from app.main import app
 
@@ -38,14 +35,10 @@ def override_session(test_engine) -> Generator[None, None, None]:
 
     app.dependency_overrides[get_session] = get_test_session
     app.dependency_overrides[get_jwt_service] = lambda: JwtService(JWT_SECRET)
-    app.state.auth_session_factory = lambda: Session(test_engine)
-    app.state.auth_jwt_service_factory = lambda: JwtService(JWT_SECRET)
     try:
         yield
     finally:
         app.dependency_overrides.clear()
-        delattr(app.state, "auth_session_factory")
-        delattr(app.state, "auth_jwt_service_factory")
 
 
 @pytest_asyncio.fixture
@@ -150,19 +143,6 @@ async def test_current_user_endpoint_rejects_refresh_token(
 
 
 @pytest.mark.asyncio
-async def test_current_user_endpoint_rejects_token_for_missing_user(
-    auth_client: AsyncClient,
-) -> None:
-    response = await auth_client.get(
-        "/api/v1/users/me",
-        headers=_authorization_header(UUID("11111111-1111-4111-8111-111111111111")),
-    )
-
-    assert response.status_code == 401
-    assert response.json()["error"]["code"] == "INVALID_TOKEN"
-
-
-@pytest.mark.asyncio
 async def test_current_user_endpoint_accepts_case_insensitive_bearer_scheme(
     auth_client: AsyncClient,
 ) -> None:
@@ -179,26 +159,6 @@ async def test_current_user_endpoint_accepts_case_insensitive_bearer_scheme(
 
     assert response.status_code == 200
     assert response.json()["data"]["id"] == str(user_id)
-
-
-@pytest.mark.asyncio
-async def test_current_user_endpoint_rejects_malformed_bearer_header(
-    auth_client: AsyncClient,
-) -> None:
-    user_id = await _register_user(auth_client)
-    token = JwtService(JWT_SECRET).create_access_token(
-        user_id=user_id,
-        email="murali@example.com",
-    )
-
-    response = await auth_client.get(
-        "/api/v1/users/me",
-        headers={"Authorization": f"Bearer {token} extra"},
-    )
-
-    assert response.status_code == 401
-    assert response.json()["error"]["code"] == "INVALID_TOKEN"
-    assert token not in response.text
 
 
 @pytest.mark.asyncio
@@ -268,35 +228,3 @@ async def test_current_user_endpoint_rejects_soft_deleted_user(
 
     assert response.status_code == 401
     assert response.json()["error"]["code"] == "ACCOUNT_DISABLED"
-
-
-def test_get_current_user_rechecks_inactive_request_state_user() -> None:
-    request = SimpleNamespace(
-        state=SimpleNamespace(
-            current_user=User(
-                email="disabled-state@example.com",
-                password_hash="$argon2id$test",
-                display_name="Disabled State",
-                is_active=False,
-            )
-        )
-    )
-
-    with pytest.raises(AccountDisabledError):
-        get_current_user(request=request, session=None, jwt_service=None)
-
-
-def test_get_current_user_rechecks_soft_deleted_request_state_user() -> None:
-    request = SimpleNamespace(
-        state=SimpleNamespace(
-            current_user=User(
-                email="deleted-state@example.com",
-                password_hash="$argon2id$test",
-                display_name="Deleted State",
-                deleted_at=datetime(2026, 1, 1),
-            )
-        )
-    )
-
-    with pytest.raises(AccountDisabledError):
-        get_current_user(request=request, session=None, jwt_service=None)

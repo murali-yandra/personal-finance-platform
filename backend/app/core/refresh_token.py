@@ -13,11 +13,10 @@ from app.core.jwt import (
 
 @dataclass(frozen=True)
 class RefreshTokenResult:
-    """Validated refresh token claims used to issue a new access token."""
+    """Result returned after successfully refreshing an access token."""
 
+    access_token: str
     user_id: UUID
-    email: str
-    role: str
 
 
 class RefreshTokenError(ValueError):
@@ -33,16 +32,21 @@ class RefreshTokenInvalidError(RefreshTokenError):
 
 
 class RefreshTokenService:
-    """Validates refresh tokens before access-token issuance."""
+    """Validates refresh tokens and issues new access tokens."""
 
     def __init__(self, jwt_service: JwtService) -> None:
         self._jwt_service = jwt_service
 
     def refresh_access_token(self, refresh_token: str) -> RefreshTokenResult:
-        """Validate a refresh token and return trusted token claims."""
+        """Validate a refresh token and issue a new access token."""
         claims = self._decode_refresh_token(refresh_token)
         user_id, email, role = self._extract_refresh_claims(claims)
-        return RefreshTokenResult(user_id=user_id, email=email, role=role)
+        access_token = self._jwt_service.create_access_token(
+            user_id=user_id,
+            email=email,
+            role=role,
+        )
+        return RefreshTokenResult(access_token=access_token, user_id=user_id)
 
     def _decode_refresh_token(self, refresh_token: str) -> dict[str, object]:
         try:
