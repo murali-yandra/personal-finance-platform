@@ -221,6 +221,34 @@ def test_create_account_maps_duplicate_identity_to_domain_error(
         )
 
 
+def test_create_account_rejects_duplicate_nullable_identity_before_flush(
+    session: Session,
+) -> None:
+    user = _create_user(session, "owner@example.com")
+    repository = AccountRepository(session)
+    repository.create_account(
+        _account(
+            user_id=user.id,
+            account_name="Cash One",
+            bank_name=None,
+            last_four_digits=None,
+            account_type=AccountType.CASH,
+        )
+    )
+    repository.commit()
+
+    with pytest.raises(DuplicateAccountIdentityError):
+        repository.create_account(
+            _account(
+                user_id=user.id,
+                account_name="Cash Two",
+                bank_name=None,
+                last_four_digits=None,
+                account_type=AccountType.CASH,
+            )
+        )
+
+
 def test_update_account_maps_duplicate_identity_to_domain_error(
     session: Session,
 ) -> None:
@@ -262,6 +290,19 @@ def test_update_account_rejects_unsupported_fields(session: Session) -> None:
         repository.update_account(account.id, user.id, {"user_id": user.id})
 
 
+def test_update_account_rejects_estimated_balance_updates(session: Session) -> None:
+    user = _create_user(session, "owner@example.com")
+    account = _persist_account(session, user.id)
+    repository = AccountRepository(session)
+
+    with pytest.raises(ValueError, match="Unsupported account update field"):
+        repository.update_account(
+            account.id,
+            user.id,
+            {"estimated_balance": Decimal("100.00")},
+        )
+
+
 def _create_user(session: Session, email: str) -> User:
     user = User(
         email=email,
@@ -280,8 +321,8 @@ def _persist_account(
     *,
     account_name: str = "Salary Account",
     account_type: AccountType = AccountType.BANK,
-    bank_name: str = "ICICI",
-    last_four_digits: str = "0452",
+    bank_name: str | None = "ICICI",
+    last_four_digits: str | None = "0452",
     status: AccountStatus = AccountStatus.PENDING,
 ) -> Account:
     account = _account(
@@ -303,8 +344,8 @@ def _account(
     user_id,
     account_name: str = "Salary Account",
     account_type: AccountType = AccountType.BANK,
-    bank_name: str = "ICICI",
-    last_four_digits: str = "0452",
+    bank_name: str | None = "ICICI",
+    last_four_digits: str | None = "0452",
     status: AccountStatus = AccountStatus.PENDING,
 ) -> Account:
     return Account(

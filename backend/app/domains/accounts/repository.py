@@ -18,7 +18,6 @@ UPDATABLE_ACCOUNT_FIELDS = {
     "last_four_digits",
     "currency",
     "opening_balance",
-    "estimated_balance",
     "status",
 }
 
@@ -31,6 +30,9 @@ class AccountRepository:
 
     def create_account(self, account: Account) -> Account:
         """Persist a new account."""
+        if self._account_identity_exists_for_account(account):
+            raise DuplicateAccountIdentityError()
+
         self._session.add(account)
         self._flush_with_duplicate_mapping()
         return account
@@ -71,6 +73,12 @@ class AccountRepository:
             if field_name not in UPDATABLE_ACCOUNT_FIELDS:
                 raise ValueError(f"Unsupported account update field: {field_name}")
             setattr(account, field_name, _database_value(value))
+
+        if self._account_identity_exists_for_account(
+            account,
+            exclude_account_id=account.id,
+        ):
+            raise DuplicateAccountIdentityError()
 
         self._session.add(account)
         self._flush_with_duplicate_mapping()
@@ -119,6 +127,21 @@ class AccountRepository:
             if _is_account_identity_unique_violation(exc):
                 raise DuplicateAccountIdentityError() from exc
             raise
+
+    def _account_identity_exists_for_account(
+        self,
+        account: Account,
+        *,
+        exclude_account_id: UUID | None = None,
+    ) -> bool:
+        with self._session.no_autoflush:
+            return self.account_identity_exists(
+                user_id=account.user_id,
+                bank_name=account.bank_name,
+                last_four_digits=account.last_four_digits,
+                account_type=account.account_type,
+                exclude_account_id=exclude_account_id,
+            )
 
 
 def _database_value(value: Any) -> Any:
