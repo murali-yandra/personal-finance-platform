@@ -1,4 +1,4 @@
-"""Accounts domain skeleton."""
+"""Accounts domain."""
 
 from app.domains.accounts.models import Account
 
