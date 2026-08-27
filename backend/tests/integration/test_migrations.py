@@ -18,6 +18,7 @@ EXPECTED_TABLES = {
     "accounts",
     "transactions",
     "audit_log",
+    "raw_events",
 }
 
 
@@ -40,6 +41,7 @@ def test_model_metadata_matches_migrated_schema(postgres_engine: Engine) -> None
 
     import app.domains.accounts.models  # noqa: F401
     import app.domains.audit.models  # noqa: F401
+    import app.domains.ingestion.models  # noqa: F401
     import app.domains.transactions.models  # noqa: F401
     import app.domains.users.models  # noqa: F401
 

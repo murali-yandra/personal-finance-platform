@@ -22,10 +22,9 @@ if TYPE_CHECKING:
 class Transaction(SQLModel, table=True):
     """Database entity for financial transactions.
 
-    ``raw_event_id``, ``merchant_id`` and ``category_id`` are plain UUID columns
-    here. The tables they point at arrive in Sprints 4, 6 and 7; the foreign keys
-    are added by those sprints' migrations, so the column types are already
-    correct and no data rewrite is needed.
+    ``merchant_id`` and ``category_id`` are still plain UUID columns. Those
+    tables arrive in Sprints 6 and 7, whose migrations attach the foreign keys;
+    the column types are already correct, so no data rewrite is needed.
     """
 
     __tablename__ = "transactions"
@@ -57,7 +56,7 @@ class Transaction(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     user_id: UUID = Field(foreign_key="users.id", nullable=False)
     account_id: UUID = Field(foreign_key="accounts.id", nullable=False)
-    raw_event_id: UUID | None = Field(default=None)
+    raw_event_id: UUID | None = Field(default=None, foreign_key="raw_events.id")
     merchant_id: UUID | None = Field(default=None)
     category_id: UUID | None = Field(default=None)
 

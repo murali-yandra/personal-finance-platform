@@ -25,6 +25,7 @@ class Settings(BaseSettings):
 
     jwt_secret: SecretStr
     ingest_api_key: SecretStr
+    ingest_user_email: str = ""
 
     enable_ai: bool = False
     enable_telegram: bool = False

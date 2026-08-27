@@ -34,6 +34,9 @@ PUBLIC_PATHS = {
     "/api/v1/auth/register",
     "/api/v1/auth/login",
     "/api/v1/auth/refresh",
+    # Authenticated by X-API-KEY instead of a JWT, so the bearer-token
+    # middleware must not reject the request before the key is checked.
+    "/api/v1/ingest/sms",
 }
 PROTECTED_PREFIX = "/api/v1"
 
