@@ -22,6 +22,8 @@ EXPECTED_TABLES = {
     "merchants",
     "merchant_patterns",
     "categories",
+    "balance_snapshots",
+    "transfers",
 }
 
 
@@ -44,10 +46,12 @@ def test_model_metadata_matches_migrated_schema(postgres_engine: Engine) -> None
 
     import app.domains.accounts.models  # noqa: F401
     import app.domains.audit.models  # noqa: F401
+    import app.domains.balances.models  # noqa: F401
     import app.domains.categories.models  # noqa: F401
     import app.domains.ingestion.models  # noqa: F401
     import app.domains.merchants.models  # noqa: F401
     import app.domains.transactions.models  # noqa: F401
+    import app.domains.transfers.models  # noqa: F401
     import app.domains.users.models  # noqa: F401
 
     inspector = inspect(postgres_engine)

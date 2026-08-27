@@ -10,8 +10,10 @@ from app.api.health import router as health_router
 from app.api.ingest import router as ingest_router
 from app.api.merchants import router as merchants_router
 from app.api.middleware.authentication import AuthenticationMiddleware
+from app.api.reports import router as reports_router
 from app.api.telegram import router as telegram_router
 from app.api.transactions import router as transactions_router
+from app.api.transfers import router as transfers_router
 from app.api.users import router as users_router
 from app.config import get_settings
 from app.core.logging import configure_logging
@@ -39,6 +41,8 @@ def create_app() -> FastAPI:
     application.include_router(merchants_router, prefix="/api/v1")
     application.include_router(categories_router, prefix="/api/v1")
     application.include_router(telegram_router, prefix="/api/v1")
+    application.include_router(reports_router, prefix="/api/v1")
+    application.include_router(transfers_router, prefix="/api/v1")
     application.add_middleware(AuthenticationMiddleware)
 
     if settings.cors_origins:

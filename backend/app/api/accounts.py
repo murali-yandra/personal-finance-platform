@@ -19,6 +19,7 @@ from app.domains.accounts.schemas import (
 )
 from app.domains.accounts.service import AccountService
 from app.domains.audit.service import AuditService
+from app.domains.balances.service import BalanceService, reconciliation_event
 from app.domains.users.models import User
 from app.shared.enums import AccountStatus, AccountType
 from app.shared.schemas.responses import SuccessResponse
@@ -53,6 +54,21 @@ class AccountData(BaseModel):
             estimated_balance=account.estimated_balance,
             status=account.status,
         )
+
+
+class ReconcileAccountRequest(BaseModel):
+    """Request body for reconciling an account balance."""
+
+    actual_balance: Decimal
+
+
+class ReconcileAccountData(BaseModel):
+    """Response data for a balance reconciliation."""
+
+    id: UUID
+    estimated_balance: Decimal
+    actual_balance: Decimal
+    difference: Decimal
 
 
 class ArchivedAccountData(BaseModel):
@@ -93,6 +109,7 @@ class UpdateAccountRequest(BaseModel):
 
 
 AccountResponse = SuccessResponse[AccountData]
+ReconcileAccountResponse = SuccessResponse[ReconcileAccountData]
 AccountListResponse = SuccessResponse[list[AccountData]]
 ArchiveAccountResponse = SuccessResponse[ArchivedAccountData]
 
@@ -187,6 +204,53 @@ def update_account(
         )
     )
     return AccountResponse(data=AccountData.from_account(account))
+
+
+@router.post(
+    "/{account_id}/reconcile",
+    response_model=ReconcileAccountResponse,
+)
+def reconcile_account(
+    account_id: UUID,
+    request: ReconcileAccountRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[Session, Depends(get_session)],
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
+) -> ReconcileAccountResponse:
+    """Correct an account's estimated balance against a real bank figure.
+
+    Balances are estimates derived from the messages the platform happened to
+    receive, so they drift. The response reports the drift that was absorbed,
+    and the correction is audited.
+    """
+    balance_service = BalanceService(
+        session=session,
+        account_repository=AccountRepository(session),
+    )
+    account, previous, difference = balance_service.reconcile(
+        user_id=current_user.id,
+        account_id=account_id,
+        actual_balance=request.actual_balance,
+    )
+    audit_service.publish(
+        reconciliation_event(
+            user_id=current_user.id,
+            account_id=account.id,
+            previous=previous,
+            actual=account.estimated_balance,
+        )
+    )
+    session.commit()
+    session.refresh(account)
+
+    return ReconcileAccountResponse(
+        data=ReconcileAccountData(
+            id=account.id,
+            estimated_balance=previous,
+            actual_balance=account.estimated_balance,
+            difference=difference,
+        )
+    )
 
 
 @router.delete("/{account_id}", response_model=ArchiveAccountResponse)

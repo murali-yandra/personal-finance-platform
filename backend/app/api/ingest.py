@@ -12,6 +12,7 @@ from app.config import get_settings
 from app.db.session import get_session
 from app.domains.accounts.repository import AccountRepository
 from app.domains.audit.service import AuditService
+from app.domains.balances.service import BalanceService
 from app.domains.categories.repository import CategoryRepository
 from app.domains.ingestion.pipeline import SmsPipeline
 from app.domains.ingestion.repository import RawEventRepository
@@ -64,8 +65,9 @@ def get_sms_pipeline(
 ) -> SmsPipeline:
     """Build the parse-and-post pipeline that runs after a message is stored.
 
-    The audit service writes inside the transaction; the Telegram notifier is
-    buffered and released only after the commit succeeds.
+    The audit service and the balance engine both write inside the transaction,
+    so a balance can never drift from the transactions that produced it. The
+    Telegram notifier is buffered and released only after the commit succeeds.
     """
     settings = get_settings()
     notifier = BufferedEventPublisher(
@@ -81,7 +83,14 @@ def get_sms_pipeline(
         transaction_service=TransactionService(
             repository=TransactionRepository(session),
             account_repository=AccountRepository(session),
-            event_publisher=CompositeEventPublisher(audit_service, notifier),
+            event_publisher=CompositeEventPublisher(
+                audit_service,
+                BalanceService(
+                    session=session,
+                    account_repository=AccountRepository(session),
+                ),
+                notifier,
+            ),
         ),
         merchant_service=MerchantService(repository=MerchantRepository(session)),
         category_repository=CategoryRepository(session),
