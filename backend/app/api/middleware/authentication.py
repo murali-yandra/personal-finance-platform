@@ -37,6 +37,8 @@ PUBLIC_PATHS = {
     # Authenticated by X-API-KEY instead of a JWT, so the bearer-token
     # middleware must not reject the request before the key is checked.
     "/api/v1/ingest/sms",
+    # Authenticated by Telegram's secret-token header instead of a JWT.
+    "/api/v1/telegram/webhook",
 }
 PROTECTED_PREFIX = "/api/v1"
 

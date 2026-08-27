@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     enable_ai: bool = False
     enable_telegram: bool = False
 
+    telegram_bot_token: SecretStr = SecretStr("")
+    telegram_webhook_secret: SecretStr = SecretStr("")
+
     cors_origins: Annotated[list[str], NoDecode] = []
 
     @field_validator("database_url", mode="after")

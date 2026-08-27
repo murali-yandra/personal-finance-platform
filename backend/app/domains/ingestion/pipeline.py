@@ -30,6 +30,7 @@ from app.domains.merchants.service import MerchantService
 from app.domains.transactions.exceptions import DuplicateTransactionError
 from app.domains.transactions.schemas import CreateTransactionCommand
 from app.domains.transactions.service import TransactionService
+from app.events.publisher import BufferedEventPublisher
 from app.parser import ParseResult, ParserRegistry, default_registry
 from app.shared.enums import AccountStatus, ProcessingStatus
 
@@ -61,6 +62,7 @@ class SmsPipeline:
         merchant_service: MerchantService,
         category_repository: CategoryRepository,
         registry: ParserRegistry | None = None,
+        deferred_publisher: BufferedEventPublisher | None = None,
     ) -> None:
         self._raw_events = raw_event_repository
         self._accounts = account_repository
@@ -68,6 +70,7 @@ class SmsPipeline:
         self._merchants = merchant_service
         self._categories = category_repository
         self._registry = registry or default_registry
+        self._deferred_publisher = deferred_publisher
 
     def process(self, raw_event: RawEvent) -> IngestSmsResult:
         """Parse and post a stored raw event."""
@@ -105,6 +108,7 @@ class SmsPipeline:
                 )
             )
         except DuplicateTransactionError as exc:
+            self._discard_deferred()
             self._set_status(raw_event, ProcessingStatus.DUPLICATE)
             return IngestSmsResult(
                 raw_event_id=raw_event.id,
@@ -123,11 +127,25 @@ class SmsPipeline:
             else ProcessingStatus.PROCESSED
         )
         self._set_status(raw_event, status)
+
+        # Only now that the transaction is durably committed do external
+        # notifications go out. Sending earlier could announce a transaction
+        # that then rolled back.
+        self._flush_deferred()
+
         return IngestSmsResult(
             raw_event_id=raw_event.id,
             status=status,
             transaction_id=transaction.id,
         )
+
+    def _flush_deferred(self) -> None:
+        if self._deferred_publisher is not None:
+            self._deferred_publisher.flush()
+
+    def _discard_deferred(self) -> None:
+        if self._deferred_publisher is not None:
+            self._deferred_publisher.discard()
 
     def _record_unparsed(
         self,

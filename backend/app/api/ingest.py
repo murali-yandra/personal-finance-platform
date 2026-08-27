@@ -8,6 +8,7 @@ from sqlmodel import Session
 
 from app.api.dependencies.api_key import get_ingestion_user
 from app.api.dependencies.audit import get_audit_service
+from app.config import get_settings
 from app.db.session import get_session
 from app.domains.accounts.repository import AccountRepository
 from app.domains.audit.service import AuditService
@@ -21,8 +22,14 @@ from app.domains.merchants.service import MerchantService
 from app.domains.transactions.repository import TransactionRepository
 from app.domains.transactions.service import TransactionService
 from app.domains.users.models import User
+from app.events.publisher import (
+    BufferedEventPublisher,
+    CompositeEventPublisher,
+)
 from app.shared.enums import SourceType
 from app.shared.schemas.responses import SuccessResponse
+from app.telegram.factory import build_telegram_client
+from app.telegram.notifier import TelegramNotifier
 
 router = APIRouter(prefix="/ingest", tags=["ingestion"])
 
@@ -55,17 +62,30 @@ def get_sms_pipeline(
     session: Annotated[Session, Depends(get_session)],
     audit_service: Annotated[AuditService, Depends(get_audit_service)],
 ) -> SmsPipeline:
-    """Build the parse-and-post pipeline that runs after a message is stored."""
+    """Build the parse-and-post pipeline that runs after a message is stored.
+
+    The audit service writes inside the transaction; the Telegram notifier is
+    buffered and released only after the commit succeeds.
+    """
+    settings = get_settings()
+    notifier = BufferedEventPublisher(
+        TelegramNotifier(
+            client=build_telegram_client(settings),
+            session=session,
+            enabled=settings.enable_telegram,
+        )
+    )
     return SmsPipeline(
         raw_event_repository=RawEventRepository(session),
         account_repository=AccountRepository(session),
         transaction_service=TransactionService(
             repository=TransactionRepository(session),
             account_repository=AccountRepository(session),
-            event_publisher=audit_service,
+            event_publisher=CompositeEventPublisher(audit_service, notifier),
         ),
         merchant_service=MerchantService(repository=MerchantRepository(session)),
         category_repository=CategoryRepository(session),
+        deferred_publisher=notifier,
     )
 
 
