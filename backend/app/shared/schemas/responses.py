@@ -30,3 +30,19 @@ class SuccessResponse[DataT](BaseModel):
 
     success: bool = True
     data: DataT
+
+
+class PageMeta(BaseModel):
+    """Pagination metadata for list endpoints."""
+
+    page: int
+    page_size: int
+    total_records: int
+
+
+class PaginatedResponse[DataT](BaseModel):
+    """Standard API success envelope for paginated list endpoints."""
+
+    success: bool = True
+    data: list[DataT]
+    meta: PageMeta

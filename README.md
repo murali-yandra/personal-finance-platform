@@ -2,7 +2,7 @@
 
 A production-grade personal finance platform designed to track accounts, transactions, credit cards, balances, transfers, and financial insights.
 
-Ledger AI is the current project folder and Docker resource name for the Sprint 0 backend foundation.
+Ledger AI is the current project folder and Docker resource name for the backend.
 
 ## Tech Stack
 
@@ -29,11 +29,9 @@ Ledger AI is the current project folder and Docker resource name for the Sprint 
 
 ## Status
 
-Sprint 0 completed and approved.
+Sprint 0 and Sprint 1 completed and approved. Sprints 2-15 are in active delivery.
 
-This project currently includes infrastructure only: FastAPI startup, health checks, environment configuration, SQLModel/PostgreSQL wiring, Alembic scaffold, Docker setup, event scaffolding, security placeholder, financial calculator placeholder, and tests.
-
-No authentication, SMS ingestion, Telegram, AI, or financial business logic is implemented in Sprint 0.
+See `architecture/14-sprint_roadmap.md` for the authoritative roadmap.
 
 ## 1. Prerequisites
 
@@ -138,13 +136,10 @@ cd E:\ledger-ai\backend
 uv run pytest
 ```
 
-Expected result:
+The suite runs against in-memory SQLite, so it needs no database service.
 
-```text
-4 passed, 1 skipped
-```
-
-The skipped test is the PostgreSQL smoke test. It only runs when explicitly enabled.
+Skipped tests are the PostgreSQL-backed ones. They run only when explicitly
+enabled via `RUN_DB_SMOKE_TEST=1` or `RUN_INTEGRATION_TESTS=1`.
 
 ## 6. Run Code Quality Checks
 
@@ -275,11 +270,10 @@ docker compose --env-file backend\.env build backend
 
 ## 12. Alembic Check
 
-There are no business tables or migrations yet, but the Alembic scaffold can be checked:
-
 ```powershell
 cd E:\ledger-ai\backend
 uv run alembic heads
+uv run alembic current
 ```
 
 ## 13. Clean Generated Local Files
@@ -329,3 +323,71 @@ Start Docker Desktop, wait until it says Docker is running, then rerun:
 ```powershell
 docker compose version
 ```
+
+## 15. Deploy To Render
+
+The repository ships a Render Blueprint at `render.yaml`. It provisions a free
+PostgreSQL instance and a Docker web service, and redeploys on every push.
+
+### First deploy
+
+1. Sign in at [render.com](https://render.com) and choose **New -> Blueprint**.
+2. Select this repository. Render reads `render.yaml` and shows the plan: one
+   database (`ledger-ai-db`) and one web service (`ledger-ai-backend`).
+3. Render prompts for the two values that are deliberately not in the repository.
+   Generate them first:
+
+   ```powershell
+   # JWT_SECRET - must be at least 32 bytes
+   python -c "import secrets; print(secrets.token_urlsafe(48))"
+
+   # INGEST_API_KEY - the key MacroDroid sends as the X-API-KEY header
+   python -c "import secrets; print(secrets.token_urlsafe(32))"
+   ```
+
+4. Click **Apply**. The first build takes a few minutes.
+
+`DATABASE_URL` is wired automatically from the managed database. The container
+runs `backend/scripts/start.sh`, which applies `alembic upgrade head` before
+starting the API, so schema changes ship with the code.
+
+### Verify the deploy
+
+```powershell
+Invoke-RestMethod https://<your-service>.onrender.com/health
+Invoke-RestMethod https://<your-service>.onrender.com/api/v1/health/ready
+```
+
+`/health` is dependency-free and is what Render polls. `/api/v1/health/ready`
+additionally reports database connectivity.
+
+### Environment variables
+
+| Variable | Source | Notes |
+| --- | --- | --- |
+| `DATABASE_URL` | Managed database | Auto-wired. `postgres://` URLs are normalized to the psycopg driver at startup. |
+| `JWT_SECRET` | You, in the dashboard | Minimum 32 bytes. |
+| `INGEST_API_KEY` | You, in the dashboard | Shared key for the SMS ingestion endpoint. |
+| `INGEST_USER_EMAIL` | You, in the dashboard | Email of the user that owns ingested SMS messages. |
+| `CORS_ORIGINS` | Blueprint | Comma-separated browser origins. Empty disables CORS. |
+| `ENABLE_AI`, `ENABLE_TELEGRAM` | Blueprint | Off by default until credentials are supplied. |
+
+Never commit secrets. `.env` files are git-ignored per
+`architecture/10-security_standards.md` section 10.
+
+### Point MacroDroid at the deployment
+
+Configure the HTTP request action to:
+
+```text
+POST https://<your-service>.onrender.com/api/v1/ingest/sms
+X-API-KEY: <your INGEST_API_KEY>
+Content-Type: application/json
+```
+
+### Free tier caveat
+
+Render's free web services sleep after inactivity, so the first request after an
+idle period takes a few seconds. Free PostgreSQL instances expire after 30 days.
+Upgrade both to a paid plan before relying on this for real financial data, or
+move to the VPS path in `architecture/11-deployment_standards.md` section 4.

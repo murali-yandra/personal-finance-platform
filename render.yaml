@@ -1,0 +1,58 @@
+# Render Blueprint for the Personal Finance Tracking Platform.
+#
+# Deploy: Render Dashboard -> New -> Blueprint -> pick this repository.
+# Render reads this file, creates the database and web service, and redeploys on
+# every push to the tracked branch.
+#
+# Two values are deliberately NOT stored here and must be pasted in the Render
+# dashboard on first deploy (both are marked "sync: false"):
+#   JWT_SECRET      - at least 32 bytes, e.g. `openssl rand -base64 48`
+#   INGEST_API_KEY  - the shared key MacroDroid sends as the X-API-KEY header
+#
+# Secrets must never be committed (10-security_standards.md section 10).
+
+databases:
+  - name: ledger-ai-db
+    databaseName: finance
+    user: finance_app
+    plan: free
+
+services:
+  - type: web
+    name: ledger-ai-backend
+    runtime: docker
+    repo: https://github.com/murali-yandra/personal-finance-platform
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    autoDeploy: true
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ledger-ai-db
+          property: connectionString
+      - key: APP_ENV
+        value: production
+      - key: APP_NAME
+        value: Personal Finance Tracking Platform
+      - key: APP_VERSION
+        value: 0.1.0
+      - key: APP_DEBUG
+        value: "false"
+      - key: LOG_LEVEL
+        value: INFO
+      - key: DATABASE_ECHO
+        value: "false"
+      - key: JWT_SECRET
+        sync: false
+      - key: INGEST_API_KEY
+        sync: false
+      - key: INGEST_USER_EMAIL
+        sync: false
+      - key: ENABLE_AI
+        value: "false"
+      - key: ENABLE_TELEGRAM
+        value: "false"
+      - key: CORS_ORIGINS
+        value: ""
