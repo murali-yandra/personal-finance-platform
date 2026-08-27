@@ -7,6 +7,7 @@ from sqlalchemy import Column, DateTime, Index, Numeric, UniqueConstraint, func
 from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
+    from app.domains.transactions.models import Transaction
     from app.domains.users.models import User
 
 
@@ -68,3 +69,4 @@ class Account(SQLModel, table=True):
     )
 
     user: "User" = Relationship(back_populates="accounts")
+    transactions: list["Transaction"] = Relationship(back_populates="account")

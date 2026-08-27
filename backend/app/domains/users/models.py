@@ -7,6 +7,7 @@ from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
     from app.domains.accounts.models import Account
+    from app.domains.transactions.models import Transaction
 
 
 class User(SQLModel, table=True):
@@ -51,6 +52,7 @@ class User(SQLModel, table=True):
         sa_relationship_kwargs={"uselist": False},
     )
     accounts: list["Account"] = Relationship(back_populates="user")
+    transactions: list["Transaction"] = Relationship(back_populates="user")
 
 
 class UserSettings(SQLModel, table=True):
@@ -89,3 +91,4 @@ class UserSettings(SQLModel, table=True):
 
 
 from app.domains.accounts.models import Account  # noqa: E402,F401
+from app.domains.transactions.models import Transaction  # noqa: E402,F401

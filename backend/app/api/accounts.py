@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlmodel import Session
 
+from app.api.dependencies.audit import get_audit_service
 from app.api.dependencies.auth import get_current_user
 from app.db.session import get_session
 from app.domains.accounts.models import Account
@@ -17,6 +18,7 @@ from app.domains.accounts.schemas import (
     UpdateAccountCommand,
 )
 from app.domains.accounts.service import AccountService
+from app.domains.audit.service import AuditService
 from app.domains.users.models import User
 from app.shared.enums import AccountStatus, AccountType
 from app.shared.schemas.responses import SuccessResponse
@@ -97,9 +99,17 @@ ArchiveAccountResponse = SuccessResponse[ArchivedAccountData]
 
 def get_account_service(
     session: Annotated[Session, Depends(get_session)],
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
 ) -> AccountService:
-    """Build the account service dependency."""
-    return AccountService(repository=AccountRepository(session))
+    """Build the account service dependency.
+
+    The audit service is the Sprint 3 implementation of the EventPublisher
+    protocol the account service was written against in Sprint 2.
+    """
+    return AccountService(
+        repository=AccountRepository(session),
+        event_publisher=audit_service,
+    )
 
 
 @router.post(

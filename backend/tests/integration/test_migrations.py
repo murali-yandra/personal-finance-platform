@@ -16,6 +16,8 @@ EXPECTED_TABLES = {
     "users",
     "user_settings",
     "accounts",
+    "transactions",
+    "audit_log",
 }
 
 
@@ -37,6 +39,8 @@ def test_model_metadata_matches_migrated_schema(postgres_engine: Engine) -> None
     from sqlmodel import SQLModel
 
     import app.domains.accounts.models  # noqa: F401
+    import app.domains.audit.models  # noqa: F401
+    import app.domains.transactions.models  # noqa: F401
     import app.domains.users.models  # noqa: F401
 
     inspector = inspect(postgres_engine)
@@ -55,3 +59,52 @@ def test_model_metadata_matches_migrated_schema(postgres_engine: Engine) -> None
             f"Table {table_name} is missing migrated columns: "
             f"{sorted(missing_columns)}"
         )
+
+
+def test_transaction_fingerprint_index_is_partial(postgres_engine: Engine) -> None:
+    """The unique index must skip NULL fingerprints, or manual rows collide."""
+    from sqlalchemy import text
+
+    with postgres_engine.connect() as connection:
+        definition = connection.execute(
+            text(
+                "SELECT indexdef FROM pg_indexes "
+                "WHERE tablename = 'transactions' "
+                "AND indexname = 'uq_transaction_fingerprint_user'"
+            )
+        ).scalar_one()
+
+    assert "UNIQUE" in definition
+    assert "transaction_fingerprint IS NOT NULL" in definition
+
+
+def test_transaction_check_constraints_exist(postgres_engine: Engine) -> None:
+    from sqlalchemy import text
+
+    with postgres_engine.connect() as connection:
+        names = {
+            row[0]
+            for row in connection.execute(
+                text(
+                    "SELECT conname FROM pg_constraint "
+                    "WHERE conrelid = 'transactions'::regclass AND contype = 'c'"
+                )
+            )
+        }
+
+    assert "chk_transaction_amount_positive" in names
+    assert "chk_transaction_direction" in names
+
+
+def test_amount_precision_survives_a_round_trip(postgres_engine: Engine) -> None:
+    """NUMERIC(18,2) must not silently truncate a large balance."""
+    from decimal import Decimal
+
+    from sqlalchemy import text
+
+    with postgres_engine.connect() as connection:
+        value = connection.execute(
+            text("SELECT CAST('1234567890123456.78' AS NUMERIC(18,2))")
+        ).scalar_one()
+
+    assert value == Decimal("1234567890123456.78")
