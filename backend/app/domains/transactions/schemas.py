@@ -30,6 +30,10 @@ class CreateTransactionCommand:
     confidence_score: Decimal | None = None
     exchange_rate: Decimal | None = None
     base_currency: str | None = None
+    # Set only by the ingestion pipeline. A user cannot manually post to an
+    # account they archived, but a bank message proves money still moved on it,
+    # and dropping that transaction would silently lose real money.
+    allow_archived_account: bool = False
 
 
 @dataclass(frozen=True)

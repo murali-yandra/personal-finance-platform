@@ -19,6 +19,9 @@ EXPECTED_TABLES = {
     "transactions",
     "audit_log",
     "raw_events",
+    "merchants",
+    "merchant_patterns",
+    "categories",
 }
 
 
@@ -41,7 +44,9 @@ def test_model_metadata_matches_migrated_schema(postgres_engine: Engine) -> None
 
     import app.domains.accounts.models  # noqa: F401
     import app.domains.audit.models  # noqa: F401
+    import app.domains.categories.models  # noqa: F401
     import app.domains.ingestion.models  # noqa: F401
+    import app.domains.merchants.models  # noqa: F401
     import app.domains.transactions.models  # noqa: F401
     import app.domains.users.models  # noqa: F401
 
@@ -110,3 +115,59 @@ def test_amount_precision_survives_a_round_trip(postgres_engine: Engine) -> None
         ).scalar_one()
 
     assert value == Decimal("1234567890123456.78")
+
+
+def test_system_categories_are_seeded(postgres_engine: Engine) -> None:
+    """Migration 0009 seeds the 14 categories from 04-database_schema.md section 6."""
+    from sqlalchemy import text
+
+    with postgres_engine.connect() as connection:
+        count = connection.execute(
+            text(
+                "SELECT count(*) FROM categories "
+                "WHERE user_id IS NULL AND is_system = TRUE"
+            )
+        ).scalar_one()
+
+    assert count == 14
+
+
+def test_category_uniqueness_indexes_are_partial(postgres_engine: Engine) -> None:
+    """A plain unique on (user_id, name) would not constrain system rows at all."""
+    from sqlalchemy import text
+
+    with postgres_engine.connect() as connection:
+        definitions = {
+            row[0]: row[1]
+            for row in connection.execute(
+                text(
+                    "SELECT indexname, indexdef FROM pg_indexes "
+                    "WHERE tablename = 'categories' AND indexname LIKE 'uq_%'"
+                )
+            )
+        }
+
+    assert "user_id IS NULL" in definitions["uq_system_category_name"]
+    assert "user_id IS NOT NULL" in definitions["uq_user_category_name"]
+
+
+def test_all_deferred_foreign_keys_are_attached(postgres_engine: Engine) -> None:
+    """Migrations 0006-0008 attach the FKs migration 0004 could not create yet."""
+    from sqlalchemy import text
+
+    with postgres_engine.connect() as connection:
+        names = {
+            row[0]
+            for row in connection.execute(
+                text(
+                    "SELECT conname FROM pg_constraint "
+                    "WHERE conrelid = 'transactions'::regclass AND contype = 'f'"
+                )
+            )
+        }
+
+    assert {
+        "fk_transactions_raw_event_id",
+        "fk_transactions_merchant_id",
+        "fk_transactions_category_id",
+    } <= names

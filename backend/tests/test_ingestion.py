@@ -236,6 +236,12 @@ async def test_ingest_endpoint_accepts_a_valid_api_key(
     auth_client: AsyncClient,
     configured_ingest_user: None,
 ) -> None:
+    """The endpoint runs the full pipeline, so a parseable SMS becomes a transaction.
+
+    The account in this message is not one the user has registered, so the
+    pipeline creates a PENDING account and reports NEEDS_REVIEW rather than
+    PROCESSED.
+    """
     await register_user(auth_client, email="owner@example.com")
 
     response = await auth_client.post(
@@ -246,8 +252,9 @@ async def test_ingest_endpoint_accepts_a_valid_api_key(
 
     assert response.status_code == 201, response.text
     data = response.json()["data"]
-    assert data["status"] == "RECEIVED"
+    assert data["status"] == "NEEDS_REVIEW"
     UUID(data["raw_event_id"])
+    assert data["transaction_id"] is not None
 
 
 @pytest.mark.asyncio

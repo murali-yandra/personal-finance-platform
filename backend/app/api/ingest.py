@@ -7,10 +7,19 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlmodel import Session
 
 from app.api.dependencies.api_key import get_ingestion_user
+from app.api.dependencies.audit import get_audit_service
 from app.db.session import get_session
+from app.domains.accounts.repository import AccountRepository
+from app.domains.audit.service import AuditService
+from app.domains.categories.repository import CategoryRepository
+from app.domains.ingestion.pipeline import SmsPipeline
 from app.domains.ingestion.repository import RawEventRepository
 from app.domains.ingestion.schemas import IngestSmsCommand
 from app.domains.ingestion.service import IngestionService
+from app.domains.merchants.repository import MerchantRepository
+from app.domains.merchants.service import MerchantService
+from app.domains.transactions.repository import TransactionRepository
+from app.domains.transactions.service import TransactionService
 from app.domains.users.models import User
 from app.shared.enums import SourceType
 from app.shared.schemas.responses import SuccessResponse
@@ -42,11 +51,33 @@ class IngestSmsData(BaseModel):
 IngestSmsResponse = SuccessResponse[IngestSmsData]
 
 
+def get_sms_pipeline(
+    session: Annotated[Session, Depends(get_session)],
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
+) -> SmsPipeline:
+    """Build the parse-and-post pipeline that runs after a message is stored."""
+    return SmsPipeline(
+        raw_event_repository=RawEventRepository(session),
+        account_repository=AccountRepository(session),
+        transaction_service=TransactionService(
+            repository=TransactionRepository(session),
+            account_repository=AccountRepository(session),
+            event_publisher=audit_service,
+        ),
+        merchant_service=MerchantService(repository=MerchantRepository(session)),
+        category_repository=CategoryRepository(session),
+    )
+
+
 def get_ingestion_service(
     session: Annotated[Session, Depends(get_session)],
+    pipeline: Annotated[SmsPipeline, Depends(get_sms_pipeline)],
 ) -> IngestionService:
     """Build the ingestion service dependency."""
-    return IngestionService(repository=RawEventRepository(session))
+    return IngestionService(
+        repository=RawEventRepository(session),
+        processor=pipeline,
+    )
 
 
 @router.post(

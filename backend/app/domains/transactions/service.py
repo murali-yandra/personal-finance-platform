@@ -69,7 +69,10 @@ class TransactionService:
         )
         if account is None:
             raise MissingAccountError()
-        if account.status == AccountStatus.ARCHIVED:
+        if (
+            account.status == AccountStatus.ARCHIVED
+            and not command.allow_archived_account
+        ):
             raise TransactionValidationError(
                 "Transactions cannot be posted to an archived account."
             )

@@ -22,9 +22,8 @@ if TYPE_CHECKING:
 class Transaction(SQLModel, table=True):
     """Database entity for financial transactions.
 
-    ``merchant_id`` and ``category_id`` are still plain UUID columns. Those
-    tables arrive in Sprints 6 and 7, whose migrations attach the foreign keys;
-    the column types are already correct, so no data rewrite is needed.
+    Every foreign key is now attached. Migrations 0006, 0007 and 0008 added the
+    raw event, merchant and category constraints once those tables existed.
     """
 
     __tablename__ = "transactions"
@@ -57,8 +56,8 @@ class Transaction(SQLModel, table=True):
     user_id: UUID = Field(foreign_key="users.id", nullable=False)
     account_id: UUID = Field(foreign_key="accounts.id", nullable=False)
     raw_event_id: UUID | None = Field(default=None, foreign_key="raw_events.id")
-    merchant_id: UUID | None = Field(default=None)
-    category_id: UUID | None = Field(default=None)
+    merchant_id: UUID | None = Field(default=None, foreign_key="merchants.id")
+    category_id: UUID | None = Field(default=None, foreign_key="categories.id")
 
     amount: Decimal = Field(sa_column=Column(Numeric(18, 2), nullable=False))
     currency: str = Field(default="INR", max_length=3, nullable=False)
