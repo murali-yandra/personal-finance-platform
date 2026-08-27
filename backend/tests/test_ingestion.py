@@ -15,7 +15,6 @@ from app.domains.ingestion.repository import RawEventRepository
 from app.domains.ingestion.schemas import IngestSmsCommand
 from app.domains.ingestion.service import IngestionService
 from app.domains.users.models import User, UserSettings
-from app.main import app
 from app.shared.enums import ProcessingStatus
 from tests.conftest import register_user
 
