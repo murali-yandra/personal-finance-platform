@@ -29,9 +29,35 @@ Ledger AI is the current project folder and Docker resource name for the backend
 
 ## Status
 
-Sprint 0 and Sprint 1 completed and approved. Sprints 2-15 are in active delivery.
+All sprints 0-15 of `architecture/14-sprint_roadmap.md` are implemented.
 
-See `architecture/14-sprint_roadmap.md` for the authoritative roadmap.
+| Sprint | Scope |
+| --- | --- |
+| 0-1 | Foundation, authentication |
+| 2-4 | Accounts, transactions, audit trail, SMS ingestion |
+| 5-7 | Parsing engine, merchant normalization, categories |
+| 8-10 | Telegram, reporting, balance engine, transfers |
+| 11-13 | Historical import, AI suggestions, learning engine |
+| 14-15 | Structured logging, backups, rate limiting, per-user API keys, roles, admin APIs |
+
+MVP scope (through Sprint 10) is feature-complete. Telegram and AI ship behind
+`ENABLE_TELEGRAM` and `ENABLE_AI`, off by default until credentials are supplied.
+MFA is the one roadmap item deliberately left open; see
+`backend/docs/sprint-14-15-hardening-saas.md`.
+
+Per-sprint notes are in `backend/docs/`.
+
+## Verify A Deployment
+
+```powershell
+$env:BASE_URL = "https://<your-service>.onrender.com"
+$env:INGEST_API_KEY = "<your key>"
+bash backend/scripts/smoke_mvp.sh
+```
+
+This walks register, login, account creation, SMS ingestion, and asserts the
+transaction reaches the ledger, the balance, the reports and the audit trail,
+and that a replayed message does not double-count.
 
 ## 1. Prerequisites
 
