@@ -17,7 +17,13 @@ from app.domains.ingestion.exceptions import InvalidSmsPayloadError
 from app.domains.ingestion.hashing import build_message_hash
 from app.domains.ingestion.models import RawEvent
 from app.domains.ingestion.repository import RawEventRepository
-from app.domains.ingestion.schemas import IngestSmsCommand, IngestSmsResult
+from app.domains.ingestion.schemas import (
+    IngestSmsBatchCommand,
+    IngestSmsBatchResult,
+    IngestSmsCommand,
+    IngestSmsResult,
+    ReprocessResult,
+)
 from app.shared.enums import ProcessingStatus
 
 logger = logging.getLogger(__name__)
@@ -100,6 +106,20 @@ class IngestionService:
             )
         return self._process(raw_event)
 
+    @property
+    def processor(self) -> RawEventProcessor | None:
+        """Return the configured downstream processor, if any."""
+        return self._processor
+
+    def process_stored_event(self, raw_event: RawEvent) -> IngestSmsResult:
+        """Re-run the pipeline over an already-stored raw event."""
+        if self._processor is None:
+            return IngestSmsResult(
+                raw_event_id=raw_event.id,
+                status=ProcessingStatus(raw_event.processing_status),
+            )
+        return self._process(raw_event)
+
     def _process(self, raw_event: RawEvent) -> IngestSmsResult:
         """Run the downstream pipeline, never losing the stored message."""
         try:
@@ -136,3 +156,113 @@ def _clean(value: str | None) -> str | None:
         return None
     text = value.strip()
     return text or None
+
+
+MAX_BATCH_SIZE = 1000
+
+# Statuses worth re-running. A message that was IGNORED is not a parser gap,
+# and one already PROCESSED would only produce a duplicate.
+REPROCESSABLE_STATUSES = (
+    ProcessingStatus.FAILED.value,
+    ProcessingStatus.UNKNOWN_FORMAT.value,
+    ProcessingStatus.RECEIVED.value,
+)
+
+
+class HistoricalImportService:
+    """Bulk import and reprocessing of source messages (Sprint 11)."""
+
+    def __init__(
+        self,
+        repository: RawEventRepository,
+        ingestion_service: "IngestionService",
+    ) -> None:
+        self._repository = repository
+        self._ingestion = ingestion_service
+
+    def import_batch(self, command: "IngestSmsBatchCommand") -> "IngestSmsBatchResult":
+        """Import many messages, counting each outcome.
+
+        Each message is stored and processed independently. One unreadable
+        message in a year of history must not abort the import, so failures are
+        counted rather than raised.
+        """
+        if len(command.messages) > MAX_BATCH_SIZE:
+            raise InvalidSmsPayloadError(
+                f"A batch may contain at most {MAX_BATCH_SIZE} messages."
+            )
+
+        accepted = duplicates = failed = ignored = 0
+        raw_event_ids: list[UUID] = []
+
+        for message in command.messages:
+            try:
+                result = self._ingestion.ingest_sms(message)
+            except Exception:
+                logger.exception("Batch message failed during import.")
+                failed += 1
+                continue
+
+            raw_event_ids.append(result.raw_event_id)
+            if result.is_duplicate or result.status is ProcessingStatus.DUPLICATE:
+                duplicates += 1
+            elif result.status is ProcessingStatus.IGNORED:
+                ignored += 1
+            elif result.status in {
+                ProcessingStatus.FAILED,
+                ProcessingStatus.UNKNOWN_FORMAT,
+            }:
+                failed += 1
+            else:
+                accepted += 1
+
+        return IngestSmsBatchResult(
+            accepted=accepted,
+            duplicates=duplicates,
+            failed=failed,
+            ignored=ignored,
+            raw_event_ids=tuple(raw_event_ids),
+        )
+
+    def reprocess(
+        self,
+        user_id: UUID,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+        limit: int = MAX_BATCH_SIZE,
+    ) -> "ReprocessResult":
+        """Re-run stored messages that never produced a transaction.
+
+        This is how a parser improvement is applied to history: the raw events
+        were kept precisely so they could be re-read later.
+        """
+        if self._ingestion.processor is None:
+            raise InvalidSmsPayloadError("Reprocessing requires a configured parser.")
+
+        candidates = [
+            raw_event
+            for status in REPROCESSABLE_STATUSES
+            for raw_event in self._repository.list_for_user(
+                user_id=user_id,
+                processing_status=status,
+                start_date=start_date,
+                end_date=end_date,
+                limit=limit,
+            )
+        ][:limit]
+
+        succeeded = 0
+        for raw_event in candidates:
+            try:
+                result = self._ingestion.process_stored_event(raw_event)
+            except Exception:
+                logger.exception("Reprocessing failed for %s", raw_event.id)
+                continue
+            if result.transaction_id is not None:
+                succeeded += 1
+
+        return ReprocessResult(
+            reprocessed=len(candidates),
+            succeeded=succeeded,
+            still_failing=len(candidates) - succeeded,
+        )

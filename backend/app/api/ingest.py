@@ -16,8 +16,11 @@ from app.domains.balances.service import BalanceService
 from app.domains.categories.repository import CategoryRepository
 from app.domains.ingestion.pipeline import SmsPipeline
 from app.domains.ingestion.repository import RawEventRepository
-from app.domains.ingestion.schemas import IngestSmsCommand
-from app.domains.ingestion.service import IngestionService
+from app.domains.ingestion.schemas import IngestSmsBatchCommand, IngestSmsCommand
+from app.domains.ingestion.service import (
+    HistoricalImportService,
+    IngestionService,
+)
 from app.domains.merchants.repository import MerchantRepository
 from app.domains.merchants.service import MerchantService
 from app.domains.transactions.repository import TransactionRepository
@@ -154,3 +157,130 @@ def _header_uuid(request: Request, header: str) -> UUID | None:
         return UUID(raw)
     except ValueError:
         return None
+
+
+class IngestSmsBatchRequest(BaseModel):
+    """Request body for importing many messages at once."""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    messages: list[IngestSmsRequest] = Field(min_length=1, max_length=1000)
+
+
+class IngestSmsBatchData(BaseModel):
+    """Response data for a batch import."""
+
+    accepted: int
+    duplicates: int
+    failed: int
+    ignored: int
+    total: int
+
+
+class ReprocessRequest(BaseModel):
+    """Request body for reprocessing stored messages."""
+
+    start_date: datetime | None = None
+    end_date: datetime | None = None
+
+
+class ReprocessData(BaseModel):
+    """Response data for a reprocess run."""
+
+    reprocessed: int
+    succeeded: int
+    still_failing: int
+
+
+IngestSmsBatchResponse = SuccessResponse[IngestSmsBatchData]
+ReprocessResponse = SuccessResponse[ReprocessData]
+
+
+def get_historical_import_service(
+    session: Annotated[Session, Depends(get_session)],
+    ingestion_service: Annotated[IngestionService, Depends(get_ingestion_service)],
+) -> HistoricalImportService:
+    """Build the historical import service dependency."""
+    return HistoricalImportService(
+        repository=RawEventRepository(session),
+        ingestion_service=ingestion_service,
+    )
+
+
+@router.post(
+    "/sms/batch",
+    response_model=IngestSmsBatchResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def ingest_sms_batch(
+    request: Request,
+    payload: IngestSmsBatchRequest,
+    ingestion_user: Annotated[User, Depends(get_ingestion_user)],
+    import_service: Annotated[
+        HistoricalImportService,
+        Depends(get_historical_import_service),
+    ],
+) -> IngestSmsBatchResponse:
+    """Import a batch of historical messages.
+
+    Returns 202 with per-outcome counts rather than failing the request when
+    some messages cannot be read. One unreadable message in a year of history
+    must not discard the rest of the import.
+    """
+    correlation_id = _header_uuid(request, CORRELATION_ID_HEADER)
+    request_id = _header_uuid(request, REQUEST_ID_HEADER)
+
+    result = import_service.import_batch(
+        IngestSmsBatchCommand(
+            user_id=ingestion_user.id,
+            messages=tuple(
+                IngestSmsCommand(
+                    user_id=ingestion_user.id,
+                    message_text=message.message_text,
+                    received_at=message.received_at,
+                    sender=message.sender,
+                    source_type=SourceType.SMS,
+                    correlation_id=correlation_id,
+                    request_id=request_id,
+                )
+                for message in payload.messages
+            ),
+        )
+    )
+    return IngestSmsBatchResponse(
+        data=IngestSmsBatchData(
+            accepted=result.accepted,
+            duplicates=result.duplicates,
+            failed=result.failed,
+            ignored=result.ignored,
+            total=result.total,
+        )
+    )
+
+
+@router.post("/reprocess", response_model=ReprocessResponse)
+def reprocess_raw_events(
+    payload: ReprocessRequest,
+    ingestion_user: Annotated[User, Depends(get_ingestion_user)],
+    import_service: Annotated[
+        HistoricalImportService,
+        Depends(get_historical_import_service),
+    ],
+) -> ReprocessResponse:
+    """Re-run stored messages that never produced a transaction.
+
+    This applies a parser improvement to history. Raw events are retained
+    permanently precisely so they can be re-read later.
+    """
+    result = import_service.reprocess(
+        user_id=ingestion_user.id,
+        start_date=payload.start_date,
+        end_date=payload.end_date,
+    )
+    return ReprocessResponse(
+        data=ReprocessData(
+            reprocessed=result.reprocessed,
+            succeeded=result.succeeded,
+            still_failing=result.still_failing,
+        )
+    )

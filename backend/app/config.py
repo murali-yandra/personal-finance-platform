@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     telegram_bot_token: SecretStr = SecretStr("")
     telegram_webhook_secret: SecretStr = SecretStr("")
 
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_model: str = "qwen3"
+
     cors_origins: Annotated[list[str], NoDecode] = []
 
     @field_validator("database_url", mode="after")

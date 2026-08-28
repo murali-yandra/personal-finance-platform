@@ -24,6 +24,8 @@ EXPECTED_TABLES = {
     "categories",
     "balance_snapshots",
     "transfers",
+    "ai_suggestions",
+    "user_feedback",
 }
 
 
@@ -45,6 +47,7 @@ def test_model_metadata_matches_migrated_schema(postgres_engine: Engine) -> None
     from sqlmodel import SQLModel
 
     import app.domains.accounts.models  # noqa: F401
+    import app.domains.ai.models  # noqa: F401
     import app.domains.audit.models  # noqa: F401
     import app.domains.balances.models  # noqa: F401
     import app.domains.categories.models  # noqa: F401

@@ -6,6 +6,7 @@ from sqlmodel import SQLModel
 
 from app.config import get_settings
 from app.domains.accounts import Account  # noqa: F401
+from app.domains.ai import AISuggestion, UserFeedback  # noqa: F401
 from app.domains.audit import AuditLog  # noqa: F401
 from app.domains.balances import BalanceSnapshot  # noqa: F401
 from app.domains.categories import Category  # noqa: F401

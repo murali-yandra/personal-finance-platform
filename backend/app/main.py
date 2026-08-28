@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.accounts import router as accounts_router
+from app.api.ai import router as ai_router
 from app.api.audit import router as audit_router
 from app.api.auth import router as auth_router
 from app.api.categories import router as categories_router
@@ -43,6 +44,7 @@ def create_app() -> FastAPI:
     application.include_router(telegram_router, prefix="/api/v1")
     application.include_router(reports_router, prefix="/api/v1")
     application.include_router(transfers_router, prefix="/api/v1")
+    application.include_router(ai_router, prefix="/api/v1")
     application.add_middleware(AuthenticationMiddleware)
 
     if settings.cors_origins:
