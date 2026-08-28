@@ -60,3 +60,7 @@ services:
         sync: false
       - key: CORS_ORIGINS
         value: ""
+      - key: RATE_LIMIT_ENABLED
+        value: "true"
+      - key: RATE_LIMIT_PER_MINUTE
+        value: "100"

@@ -14,6 +14,11 @@ from app.db.session import get_session
 from app.domains.users.models import User
 from app.main import app
 
+# Request and correlation ids must be UUIDs: they are echoed into logs and
+# audit rows, so an arbitrary client string is replaced rather than trusted.
+REQUEST_ID = "33333333-3333-4333-8333-333333333333"
+CORRELATION_ID = "44444444-4444-4444-8444-444444444444"
+
 JWT_SECRET = "placeholder-test-jwt-secret-32-bytes"
 USER_EMAIL = "murali@example.com"
 
@@ -150,8 +155,8 @@ async def test_refresh_endpoint_rejects_access_token(
         "/api/v1/auth/refresh",
         json={"refresh_token": access_token},
         headers={
-            "X-Request-ID": "request-refresh-invalid",
-            "X-Correlation-ID": "correlation-refresh-invalid",
+            "X-Request-ID": REQUEST_ID,
+            "X-Correlation-ID": CORRELATION_ID,
         },
     )
 
@@ -161,8 +166,8 @@ async def test_refresh_endpoint_rejects_access_token(
         "error": {
             "code": "INVALID_TOKEN",
             "message": "Invalid authentication token.",
-            "request_id": "request-refresh-invalid",
-            "correlation_id": "correlation-refresh-invalid",
+            "request_id": REQUEST_ID,
+            "correlation_id": CORRELATION_ID,
         },
     }
 

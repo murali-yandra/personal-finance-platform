@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from sqlmodel import Session
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from app.core.context import set_current_user_id
 from app.core.jwt import (
     JwtService,
     JwtTokenExpiredError,
@@ -148,6 +149,9 @@ def _extract_user_id(claims: dict[str, object]) -> UUID | None:
 def _attach_current_user(request: Request, user: User) -> None:
     request.state.current_user = user
     request.state.current_user_id = user.id
+    # Bound here so every log line from the request carries the user id, which
+    # 10-security_standards.md section 11 requires of structured logs.
+    set_current_user_id(user.id)
 
 
 def _authentication_error_response(request: Request, code: str) -> JSONResponse:

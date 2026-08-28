@@ -5,6 +5,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from app.core.context import correlation_id_var, request_id_var
 from app.shared.exceptions.base import ApplicationError
 from app.shared.schemas.responses import (
     ErrorResponse,
@@ -91,8 +92,20 @@ def _error_response(
     message: str,
     details: list[ValidationErrorDetail] | None = None,
 ) -> JSONResponse:
-    request_id = request.headers.get(REQUEST_ID_HEADER, str(uuid4()))
-    correlation_id = request.headers.get(CORRELATION_ID_HEADER, request_id)
+    # Prefer the ids the request-context middleware bound: they are validated
+    # UUIDs and are the ones the log lines carry.
+    request_id = (
+        request_id_var.get()
+        or getattr(request.state, "request_id", None)
+        or request.headers.get(REQUEST_ID_HEADER)
+        or str(uuid4())
+    )
+    correlation_id = (
+        correlation_id_var.get()
+        or getattr(request.state, "correlation_id", None)
+        or request.headers.get(CORRELATION_ID_HEADER)
+        or request_id
+    )
     payload = ErrorResponse(
         error=ErrorResponseDetail(
             code=code,

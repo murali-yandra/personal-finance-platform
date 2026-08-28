@@ -24,6 +24,8 @@ services:
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://localhost:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3}
       CORS_ORIGINS: ${CORS_ORIGINS:-}
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-100}
     depends_on:
       postgres:
         condition: service_healthy

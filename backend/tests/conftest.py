@@ -15,6 +15,10 @@ os.environ.setdefault(
 )
 os.environ.setdefault("JWT_SECRET", "placeholder-test-jwt-secret-32-bytes")
 os.environ.setdefault("INGEST_API_KEY", "placeholder-test-ingest-api-key")
+# The rate limiter is a process-global counter, so leaving it on would make one
+# test's request budget affect another's. Its behaviour is covered directly in
+# tests/test_hardening.py against a purpose-built app.
+os.environ.setdefault("RATE_LIMIT_ENABLED", "false")
 
 from app.core.jwt import JwtService, get_jwt_service  # noqa: E402
 from app.db.session import get_session  # noqa: E402

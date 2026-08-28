@@ -38,6 +38,22 @@ class SecurityService:
         except (InvalidHashError, VerificationError, VerifyMismatchError):
             return False
 
+    def hash_secret(self, secret: str) -> str:
+        """Hash a machine-generated secret such as an API key.
+
+        The password policy is deliberately not applied: it exists to stop a
+        human choosing a weak password, and a randomly generated key has far
+        more entropy than the policy asks for while not necessarily containing
+        every required character class.
+        """
+        if not secret:
+            raise PasswordPolicyError("Secret must not be empty.")
+        return self._password_hasher.hash(secret)
+
+    def verify_secret(self, secret: str, secret_hash: str) -> bool:
+        """Verify a machine-generated secret against its hash."""
+        return self.verify_password(secret, secret_hash)
+
     def password_needs_rehash(self, password_hash: str) -> bool:
         """Return whether a stored password hash should be upgraded."""
         try:

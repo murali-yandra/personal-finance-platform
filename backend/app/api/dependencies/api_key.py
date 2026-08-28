@@ -1,8 +1,18 @@
 """API key authentication for the ingestion endpoints.
 
-MacroDroid cannot hold a JWT, so ingestion authenticates with a shared key sent
-as ``X-API-KEY`` (``10-security_standards.md`` section 7). The owning user comes
-from configuration; per-user hashed keys arrive in Sprint 15.
+MacroDroid cannot hold a JWT, so ingestion authenticates with a key sent as
+``X-API-KEY`` (``10-security_standards.md`` section 7).
+
+Two schemes are accepted, in order:
+
+1. A **per-user hashed key** issued through ``/api/v1/api-keys``. This is the
+   Sprint 15 scheme: the key identifies its owner directly, and only a hash is
+   stored.
+2. The single ``INGEST_API_KEY`` from Sprint 4, whose owner comes from
+   ``INGEST_USER_EMAIL``.
+
+The environment key is still honoured so an existing deployment keeps working
+across the upgrade; it should be removed once every device holds its own key.
 """
 
 import secrets
@@ -13,6 +23,7 @@ from sqlmodel import Session, select
 
 from app.config import Settings, get_settings
 from app.db.session import get_session
+from app.domains.access.api_keys import ApiKeyService
 from app.domains.ingestion.exceptions import (
     IngestionUserNotConfiguredError,
     InvalidApiKeyError,
@@ -38,10 +49,28 @@ def verify_api_key(
 
 def get_ingestion_user(
     session: Annotated[Session, Depends(get_session)],
-    _: Annotated[None, Depends(verify_api_key)] = None,
+    x_api_key: Annotated[str | None, Header(alias=API_KEY_HEADER)] = None,
 ) -> User:
-    """Return the user that owns ingested messages."""
+    """Return the user that owns ingested messages.
+
+    A per-user key identifies its owner directly. The shared environment key
+    falls back to the configured INGEST_USER_EMAIL.
+    """
+    if not x_api_key:
+        raise InvalidApiKeyError()
+
+    owned = ApiKeyService(session).authenticate(x_api_key)
+    if owned is not None:
+        user = session.get(User, owned.user_id)
+        if user is None or not user.is_active or user.deleted_at is not None:
+            raise InvalidApiKeyError()
+        return user
+
     settings = get_settings()
+    configured = settings.ingest_api_key.get_secret_value()
+    if not configured or not secrets.compare_digest(x_api_key, configured):
+        raise InvalidApiKeyError()
+
     email = (settings.ingest_user_email or "").strip().lower()
     if not email:
         raise IngestionUserNotConfiguredError()

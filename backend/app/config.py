@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     telegram_bot_token: SecretStr = SecretStr("")
     telegram_webhook_secret: SecretStr = SecretStr("")
 
+    rate_limit_enabled: bool = True
+    rate_limit_per_minute: int = 100
+
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen3"
 

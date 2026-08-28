@@ -17,6 +17,7 @@ class User(SQLModel, table=True):
     __table_args__ = (
         Index("idx_users_email", "email", unique=True),
         Index("idx_users_telegram_chat_id", "telegram_chat_id"),
+        Index("idx_users_role", "role"),
     )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
@@ -26,6 +27,7 @@ class User(SQLModel, table=True):
     telegram_chat_id: str | None = Field(default=None, max_length=100)
     timezone: str = Field(default="Asia/Kolkata", max_length=100, nullable=False)
     default_currency: str = Field(default="INR", max_length=3, nullable=False)
+    role: str = Field(default="USER", max_length=50, nullable=False)
     is_active: bool = Field(default=True, nullable=False)
     created_at: datetime = Field(
         sa_column=Column(

@@ -26,6 +26,8 @@ EXPECTED_TABLES = {
     "transfers",
     "ai_suggestions",
     "user_feedback",
+    "user_api_keys",
+    "user_sessions",
 }
 
 
@@ -46,6 +48,7 @@ def test_model_metadata_matches_migrated_schema(postgres_engine: Engine) -> None
     """Every column declared on a SQLModel table must exist in the migrated schema."""
     from sqlmodel import SQLModel
 
+    import app.domains.access.models  # noqa: F401
     import app.domains.accounts.models  # noqa: F401
     import app.domains.ai.models  # noqa: F401
     import app.domains.audit.models  # noqa: F401

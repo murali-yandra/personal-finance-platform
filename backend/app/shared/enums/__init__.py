@@ -125,6 +125,13 @@ class AuditAction(StrEnum):
     RULE_UPDATED = "RULE_UPDATED"
 
 
+class UserRole(StrEnum):
+    """Platform roles. Checked on the JWT claim, not read from the request."""
+
+    USER = "USER"
+    ADMIN = "ADMIN"
+
+
 class NotificationMode(StrEnum):
     """User notification preferences."""
 
