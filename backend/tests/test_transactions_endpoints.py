@@ -302,3 +302,73 @@ async def test_audit_api_is_read_only(
     for method in (auth_client.post, auth_client.patch, auth_client.delete):
         response = await method(AUDIT_URL, headers=headers)
         assert response.status_code == 405
+
+
+@pytest.mark.asyncio
+async def test_manual_expense_lowers_the_account_balance(
+    auth_client: AsyncClient,
+    authenticated_user: tuple[UUID, dict[str, str]],
+) -> None:
+    """A transaction posted through the API must move the balance.
+
+    Regression: the endpoint published only to the audit service, so a manually
+    posted transaction was recorded and audited but left estimated_balance
+    untouched. Only the SMS pipeline fanned out to the balance service.
+    """
+    _, headers = authenticated_user
+    account_id = await _create_account(auth_client, headers)
+
+    await _create_transaction(auth_client, headers, account_id, amount="250.50")
+
+    response = await auth_client.get(f"{ACCOUNTS_URL}/{account_id}", headers=headers)
+
+    assert response.json()["data"]["estimated_balance"] == "-250.50"
+
+
+@pytest.mark.asyncio
+async def test_manual_income_raises_the_account_balance(
+    auth_client: AsyncClient,
+    authenticated_user: tuple[UUID, dict[str, str]],
+) -> None:
+    _, headers = authenticated_user
+    account_id = await _create_account(auth_client, headers)
+
+    await _create_transaction(
+        auth_client,
+        headers,
+        account_id,
+        amount="1200.00",
+        direction="CREDIT",
+        business_type="INCOME",
+    )
+
+    response = await auth_client.get(f"{ACCOUNTS_URL}/{account_id}", headers=headers)
+
+    assert response.json()["data"]["estimated_balance"] == "1200.00"
+
+
+@pytest.mark.asyncio
+async def test_credit_card_spending_increases_the_outstanding_balance(
+    auth_client: AsyncClient,
+    authenticated_user: tuple[UUID, dict[str, str]],
+) -> None:
+    """Liability accounts invert the sign: spending increases what is owed."""
+    _, headers = authenticated_user
+    response = await auth_client.post(
+        ACCOUNTS_URL,
+        json={
+            "account_type": "CREDIT_CARD",
+            "account_name": "ICICI Card",
+            "bank_name": "ICICI",
+            "last_four_digits": "9911",
+        },
+        headers=headers,
+    )
+    assert response.status_code == 201, response.text
+    account_id = response.json()["data"]["id"]
+
+    await _create_transaction(auth_client, headers, account_id, amount="500.00")
+
+    response = await auth_client.get(f"{ACCOUNTS_URL}/{account_id}", headers=headers)
+
+    assert response.json()["data"]["estimated_balance"] == "500.00"

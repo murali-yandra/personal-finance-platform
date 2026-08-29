@@ -13,6 +13,7 @@ from app.api.dependencies.pagination import Pagination, get_pagination
 from app.db.session import get_session
 from app.domains.accounts.repository import AccountRepository
 from app.domains.audit.service import AuditService
+from app.domains.balances.service import BalanceService
 from app.domains.transactions.models import Transaction
 from app.domains.transactions.repository import TransactionRepository
 from app.domains.transactions.schemas import (
@@ -23,6 +24,7 @@ from app.domains.transactions.schemas import (
 )
 from app.domains.transactions.service import TransactionService
 from app.domains.users.models import User
+from app.events.publisher import CompositeEventPublisher
 from app.shared.enums import BusinessType, TransactionDirection
 from app.shared.schemas.responses import (
     PageMeta,
@@ -121,11 +123,23 @@ def get_transaction_service(
     session: Annotated[Session, Depends(get_session)],
     audit_service: Annotated[AuditService, Depends(get_audit_service)],
 ) -> TransactionService:
-    """Build the transaction service dependency."""
+    """Build the transaction service dependency.
+
+    The publisher must fan out to the balance service as well as the audit
+    service: a manually posted transaction moves real money, so it has to move
+    the account balance exactly like an ingested one does. Publishing to audit
+    alone leaves ``estimated_balance`` stale.
+    """
     return TransactionService(
         repository=TransactionRepository(session),
         account_repository=AccountRepository(session),
-        event_publisher=audit_service,
+        event_publisher=CompositeEventPublisher(
+            audit_service,
+            BalanceService(
+                session=session,
+                account_repository=AccountRepository(session),
+            ),
+        ),
     )
 
 
