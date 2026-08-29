@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Ledger AI</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f6f7f9;
+    --surface: #ffffff;
+    --border: #e3e6ea;
+    --text: #14181d;
+    --muted: #667085;
+    --accent: #2f6feb;
+    --debit: #c0392b;
+    --credit: #1e8449;
+    --radius: 10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14181d;
+      --surface: #1c2127;
+      --border: #2c333b;
+      --text: #e8eaed;
+      --muted: #9aa4b2;
+      --accent: #6f9dff;
+      --debit: #e8705f;
+      --credit: #5cc98a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  h1 { font-size: 1.15rem; margin: 0; letter-spacing: -0.01em; }
+  h2 { font-size: 0.8rem; margin: 0 0 0.75rem; color: var(--muted);
+       text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+  main { padding: 1.5rem; max-width: 1180px; margin: 0 auto; }
+  .grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.1rem 1.25rem;
+    min-width: 0;
+  }
+  .card.span { grid-column: 1 / -1; }
+  .stat { font-size: 1.65rem; font-weight: 650; letter-spacing: -0.02em; }
+  .stat.sub { font-size: 1rem; font-weight: 500; }
+  .muted { color: var(--muted); }
+  .row { display: flex; justify-content: space-between; gap: 1rem; padding: 0.45rem 0; }
+  .row + .row { border-top: 1px solid var(--border); }
+  .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .debit { color: var(--debit); }
+  .credit { color: var(--credit); }
+  .scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+  th, td { text-align: left; padding: 0.5rem 0.7rem 0.5rem 0; white-space: nowrap; }
+  th { color: var(--muted); font-weight: 600; font-size: 0.78rem;
+       text-transform: uppercase; letter-spacing: 0.05em; }
+  tbody tr { border-top: 1px solid var(--border); }
+  td.wrap { white-space: normal; min-width: 12rem; }
+  td.right, th.right { text-align: right; padding-right: 0; }
+  .bar { height: 6px; border-radius: 3px; background: var(--accent); opacity: 0.85; }
+  button {
+    font: inherit; cursor: pointer; border-radius: 8px; padding: 0.5rem 0.9rem;
+    border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button[disabled] { opacity: 0.6; cursor: default; }
+  input {
+    font: inherit; width: 100%; padding: 0.55rem 0.7rem; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--bg); color: var(--text);
+  }
+  label { display: block; margin-bottom: 0.75rem; }
+  label span { display: block; font-size: 0.82rem; color: var(--muted); margin-bottom: 0.25rem; }
+  #login { max-width: 340px; margin: 4rem auto; }
+  .error { color: var(--debit); font-size: 0.88rem; min-height: 1.2rem; margin-top: 0.5rem; }
+  .pill { font-size: 0.72rem; padding: 0.1rem 0.45rem; border-radius: 999px;
+          border: 1px solid var(--border); color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div id="login" hidden>
+  <div class="card">
+    <h1 style="margin-bottom:1rem">Ledger AI</h1>
+    <form id="login-form">
+      <label><span>Email</span><input id="email" type="email" autocomplete="username" required /></label>
+      <label><span>Password</span><input id="password" type="password" autocomplete="current-password" required /></label>
+      <button class="primary" type="submit" style="width:100%">Sign in</button>
+      <p class="error" id="login-error" role="alert"></p>
+    </form>
+  </div>
+</div>
+
+<div id="app" hidden>
+  <header>
+    <h1>Ledger AI</h1>
+    <div style="display:flex;align-items:center;gap:0.75rem">
+      <span class="muted" id="who"></span>
+      <button id="refresh">Refresh</button>
+      <button id="logout">Sign out</button>
+    </div>
+  </header>
+  <main>
+    <p class="error" id="app-error" role="alert"></p>
+    <div class="grid">
+      <div class="card">
+        <h2>Net worth</h2>
+        <div class="stat num" id="net-worth">—</div>
+        <div class="muted" style="margin-top:0.5rem">
+          <span class="num" id="assets">—</span> assets ·
+          <span class="num" id="liabilities">—</span> owed
+        </div>
+      </div>
+      <div class="card">
+        <h2 id="month-label">This month</h2>
+        <div class="stat num" id="savings">—</div>
+        <div class="muted" style="margin-top:0.5rem">
+          <span class="num credit" id="income">—</span> in ·
+          <span class="num debit" id="expenses">—</span> out
+        </div>
+      </div>
+      <div class="card">
+        <h2>Needs review</h2>
+        <div class="stat sub" id="review">—</div>
+        <div class="muted" style="margin-top:0.5rem" id="review-detail"></div>
+      </div>
+
+      <div class="card span">
+        <h2>Accounts</h2>
+        <div id="accounts" class="muted">Loading…</div>
+      </div>
+
+      <div class="card span">
+        <h2>Spending by category, this month</h2>
+        <div id="categories" class="muted">Loading…</div>
+      </div>
+
+      <div class="card span">
+        <h2>Recent transactions</h2>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>Date</th><th>Merchant</th><th>Account</th><th>Type</th><th class="right">Amount</th>
+          </tr></thead>
+          <tbody id="transactions"><tr><td colspan="5" class="muted">Loading…</td></tr></tbody>
+        </table></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+"use strict";
+
+const API = "/api/v1";
+const STORE = "ledger-ai.tokens";
+
+const $ = (id) => document.getElementById(id);
+
+let tokens = loadTokens();
+
+function loadTokens() {
+  try {
+    return JSON.parse(sessionStorage.getItem(STORE) || "null");
+  } catch {
+    return null;
+  }
+}
+
+function saveTokens(next) {
+  tokens = next;
+  try {
+    if (next) sessionStorage.setItem(STORE, JSON.stringify(next));
+    else sessionStorage.removeItem(STORE);
+  } catch {
+    /* private mode: tokens simply do not survive a reload */
+  }
+}
+
+/** Money arrives as a JSON string like "1234.50" — never a number. */
+function money(value, currency = "INR") {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return "—";
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency,
+      maximumFractionDigits: 2,
+    }).format(amount);
+  } catch {
+    return `${currency} ${amount.toFixed(2)}`;
+  }
+}
+
+/** Timestamps are timezone-naive ISO with no Z, and may be null. */
+function when(value) {
+  if (!value) return "—";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString(undefined, {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function text(node, value) {
+  node.textContent = value;
+}
+
+async function call(path, { retry = true } = {}) {
+  const response = await fetch(`${API}${path}`, {
+    headers: { Authorization: `Bearer ${tokens?.access_token ?? ""}` },
+  });
+
+  if (response.status === 401 && retry && tokens?.refresh_token) {
+    if (await refresh()) return call(path, { retry: false });
+  }
+  if (response.status === 401) {
+    saveTokens(null);
+    showLogin("Your session expired. Sign in again.");
+    throw new Error("unauthenticated");
+  }
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(body?.error?.message || `Request failed (${response.status})`);
+  }
+  return body;
+}
+
+async function refresh() {
+  try {
+    const response = await fetch(`${API}/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: tokens.refresh_token }),
+    });
+    if (!response.ok) return false;
+    const body = await response.json();
+    // Refresh returns a new access token only; the refresh token is unchanged.
+    saveTokens({ ...tokens, access_token: body.data.access_token });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function monthRange() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  const pad = (n) => String(n).padStart(2, "0");
+  const lastDay = new Date(year, month, 0).getDate();
+  return {
+    year,
+    month,
+    start: `${year}-${pad(month)}-01`,
+    end: `${year}-${pad(month)}-${pad(lastDay)}`,
+    label: now.toLocaleDateString(undefined, { month: "long", year: "numeric" }),
+  };
+}
+
+async function load() {
+  const range = monthRange();
+  text($("month-label"), range.label);
+  $("app-error").textContent = "";
+
+  // One pass, not polling: the API allows 100 requests per minute per user.
+  const [me, netWorth, summary, breakdown, accounts, transactions, unparsed] =
+    await Promise.all([
+      call("/users/me"),
+      call("/reports/net-worth"),
+      call(`/reports/monthly-summary?year=${range.year}&month=${range.month}`),
+      call(`/reports/category-breakdown?start_date=${range.start}&end_date=${range.end}`),
+      call("/reports/account-summary"),
+      call("/transactions?page_size=25"),
+      call("/raw-events?processing_status=UNKNOWN_FORMAT&page_size=1").catch(() => null),
+    ]);
+
+  text($("who"), me.data.display_name);
+
+  const currency = netWorth.data.currency;
+  text($("net-worth"), money(netWorth.data.net_worth, currency));
+  text($("assets"), money(netWorth.data.assets, currency));
+  text($("liabilities"), money(netWorth.data.liabilities, currency));
+
+  text($("savings"), money(summary.data.savings, currency));
+  text($("income"), money(summary.data.income, currency));
+  text($("expenses"), money(summary.data.expenses, currency));
+
+  renderReview(transactions.data, unparsed);
+  renderAccounts(accounts.data);
+  renderCategories(breakdown.data, currency);
+  renderTransactions(transactions.data, accounts.data);
+}
+
+function renderReview(transactions, unparsed) {
+  const unreviewed = transactions.filter((row) => !row.is_reviewed).length;
+  text($("review"), `${unreviewed} of the last ${transactions.length}`);
+
+  // Null means the raw-events queue is unavailable, which is not the same as
+  // "nothing failed to parse" — say so rather than implying a clean bill.
+  if (!unparsed) {
+    $("review-detail").textContent = "Unparsed message count unavailable";
+    return;
+  }
+  const unreadable = unparsed.meta?.total_records ?? 0;
+  $("review-detail").textContent = unreadable
+    ? `${unreadable} message${unreadable === 1 ? "" : "s"} could not be parsed`
+    : "All captured messages were understood";
+}
+
+function renderAccounts(accounts) {
+  const host = $("accounts");
+  if (!accounts.length) {
+    host.className = "muted";
+    host.textContent = "No accounts yet. One is created automatically from your first bank SMS.";
+    return;
+  }
+  host.className = "";
+  host.innerHTML = "";
+  for (const account of accounts) {
+    const row = document.createElement("div");
+    row.className = "row";
+    const left = document.createElement("div");
+    left.innerHTML =
+      `${escapeHtml(account.account_name)} ` +
+      `<span class="pill">${escapeHtml(account.account_type)}</span>`;
+    const right = document.createElement("div");
+    right.className = "num";
+    right.textContent = money(account.estimated_balance, account.currency);
+    row.append(left, right);
+    host.append(row);
+  }
+}
+
+function renderCategories(rows, currency) {
+  const host = $("categories");
+  if (!rows.length) {
+    host.className = "muted";
+    host.textContent = "No spending recorded this month.";
+    return;
+  }
+  host.className = "";
+  host.innerHTML = "";
+  const largest = Math.max(...rows.map((row) => Math.abs(Number(row.amount)) || 0), 1);
+  for (const row of rows) {
+    const amount = Math.abs(Number(row.amount)) || 0;
+    const block = document.createElement("div");
+    block.style.marginBottom = "0.7rem";
+
+    const line = document.createElement("div");
+    line.className = "row";
+    line.style.borderTop = "none";
+    line.style.padding = "0 0 0.3rem";
+    const name = document.createElement("div");
+    name.textContent = row.category;
+    const value = document.createElement("div");
+    value.className = "num";
+    value.textContent = money(row.amount, currency);
+    line.append(name, value);
+
+    const track = document.createElement("div");
+    const bar = document.createElement("div");
+    bar.className = "bar";
+    bar.style.width = `${Math.max((amount / largest) * 100, 2)}%`;
+    track.append(bar);
+
+    block.append(line, track);
+    host.append(block);
+  }
+}
+
+function renderTransactions(rows, accounts) {
+  const names = new Map(accounts.map((a) => [a.account_id, a.account_name]));
+  const body = $("transactions");
+  body.innerHTML = "";
+  if (!rows.length) {
+    body.innerHTML = '<tr><td colspan="5" class="muted">No transactions yet.</td></tr>';
+    return;
+  }
+  for (const row of rows) {
+    const tr = document.createElement("tr");
+    const debit = row.direction === "DEBIT";
+    const cells = [
+      when(row.transaction_timestamp),
+      row.merchant_raw || row.description || "—",
+      names.get(row.account_id) || "—",
+      row.business_type,
+    ];
+    cells.forEach((value, index) => {
+      const td = document.createElement("td");
+      if (index === 1) td.className = "wrap";
+      td.textContent = value;
+      tr.append(td);
+    });
+    const amount = document.createElement("td");
+    amount.className = `right num ${debit ? "debit" : "credit"}`;
+    amount.textContent = `${debit ? "−" : "+"}${money(row.amount, row.currency)}`;
+    tr.append(amount);
+    body.append(tr);
+  }
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  })[char]);
+}
+
+function showLogin(message = "") {
+  $("app").hidden = true;
+  $("login").hidden = false;
+  $("login-error").textContent = message;
+  // Never leave a password sitting in the form once the session is over.
+  $("password").value = "";
+}
+
+function showApp() {
+  $("login").hidden = true;
+  $("app").hidden = false;
+}
+
+$("login-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const button = event.target.querySelector("button");
+  button.disabled = true;
+  $("login-error").textContent = "";
+  try {
+    const response = await fetch(`${API}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: $("email").value, password: $("password").value }),
+    });
+    const body = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(body?.error?.message || "Sign in failed.");
+    }
+    saveTokens(body.data);
+    $("password").value = "";
+    showApp();
+    await load();
+  } catch (error) {
+    $("login-error").textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+});
+
+$("logout").addEventListener("click", () => {
+  saveTokens(null);
+  showLogin();
+});
+
+$("refresh").addEventListener("click", async () => {
+  try {
+    await load();
+  } catch (error) {
+    if (error.message !== "unauthenticated") $("app-error").textContent = error.message;
+  }
+});
+
+(async function start() {
+  if (!tokens?.access_token) {
+    showLogin();
+    return;
+  }
+  showApp();
+  try {
+    await load();
+  } catch (error) {
+    if (error.message !== "unauthenticated") $("app-error").textContent = error.message;
+  }
+})();
+</script>
+</body>
+</html>
