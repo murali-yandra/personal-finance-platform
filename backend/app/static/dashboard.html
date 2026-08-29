@@ -428,6 +428,8 @@ function showLogin(message = "") {
   $("app").hidden = true;
   $("login").hidden = false;
   $("login-error").textContent = message;
+  // Never leave a password sitting in the form once the session is over.
+  $("password").value = "";
 }
 
 function showApp() {

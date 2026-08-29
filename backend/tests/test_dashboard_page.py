@@ -61,3 +61,15 @@ def test_dashboard_is_hidden_from_the_openapi_schema() -> None:
     from app.main import app
 
     assert DASHBOARD_URL not in app.openapi()["paths"]
+
+
+@pytest.mark.asyncio
+async def test_dashboard_clears_the_password_on_sign_out(client: AsyncClient) -> None:
+    """Signing out must not leave a password sitting in the form."""
+    body = (await client.get(DASHBOARD_URL)).text
+
+    marker = 'function showLogin(message = "") {'
+    start = body.index(marker)
+    end = body.index("}", start)
+
+    assert '$("password").value = ""' in body[start:end]
