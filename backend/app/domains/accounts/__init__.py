@@ -1,7 +1,11 @@
 """Accounts domain package."""
 
 from app.domains.accounts.enums import AccountStatus, AccountType
-from app.domains.accounts.exceptions import DuplicateAccountIdentityError
+from app.domains.accounts.exceptions import (
+    AccountNotFoundError,
+    AccountValidationError,
+    DuplicateAccountIdentityError,
+)
 from app.domains.accounts.models import Account
 from app.domains.accounts.repository import AccountRepository
 from app.domains.accounts.schemas import (
@@ -15,11 +19,13 @@ from app.domains.accounts.schemas import (
 __all__ = [
     "Account",
     "AccountListResponse",
+    "AccountNotFoundError",
+    "AccountRepository",
     "AccountResponse",
     "AccountResponseData",
-    "AccountRepository",
     "AccountStatus",
     "AccountType",
+    "AccountValidationError",
     "CreateAccountRequest",
     "DuplicateAccountIdentityError",
     "UpdateAccountRequest",
