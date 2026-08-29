@@ -45,6 +45,11 @@ MVP scope (through Sprint 10) is feature-complete. Telegram and AI ship behind
 MFA is the one roadmap item deliberately left open; see
 `backend/docs/sprint-14-15-hardening-saas.md`.
 
+A read-only dashboard is served at `/dashboard`: net worth, account balances,
+the month's income and expenses, spending by category, and recent transactions.
+It is a single static page with no build step, and it is not part of the sprint
+roadmap, which defers a UI in favour of Telegram.
+
 Per-sprint notes are in `backend/docs/`.
 
 ## Verify A Deployment
@@ -403,13 +408,97 @@ Never commit secrets. `.env` files are git-ignored per
 
 ### Point MacroDroid at the deployment
 
-Configure the HTTP request action to:
+#### 1. Create the account that owns the messages
+
+The deployed instance starts with an empty database. Register yourself, then mint
+an API key for the phone:
+
+```powershell
+$base = "https://<your-service>.onrender.com/api/v1"
+
+Invoke-RestMethod "$base/auth/register" -Method Post -ContentType application/json `
+  -Body '{"email":"you@example.com","password":"<your password>","display_name":"You"}'
+
+$login = Invoke-RestMethod "$base/auth/login" -Method Post -ContentType application/json `
+  -Body '{"email":"you@example.com","password":"<your password>"}'
+
+$key = Invoke-RestMethod "$base/api-keys" -Method Post `
+  -Headers @{ Authorization = "Bearer $($login.data.access_token)" } `
+  -ContentType application/json -Body '{"name":"macrodroid"}'
+
+$key.data.api_key   # shown once - copy it into MacroDroid now
+```
+
+A per-user key (`pfp_...`) identifies its owner by itself, so `INGEST_USER_EMAIL`
+is not needed. Use the shared `INGEST_API_KEY` only if you skip this step, and
+then `INGEST_USER_EMAIL` must name a registered, active user or every ingest call
+returns `503 SERVICE_UNAVAILABLE`.
+
+#### 2. Build the macro
+
+Trigger: **SMS Received**, restricted to your bank senders. Action: **HTTP
+Request**.
 
 ```text
 POST https://<your-service>.onrender.com/api/v1/ingest/sms
-X-API-KEY: <your INGEST_API_KEY>
+X-API-KEY: <the pfp_... key from step 1>
 Content-Type: application/json
 ```
+
+Body:
+
+```json
+{
+  "sender": "[sms_sender]",
+  "message_text": "[sms_message]",
+  "received_at": "[sms_received_date, yyyy-MM-dd'T'HH:mm:ss]"
+}
+```
+
+Three details cost an evening each if missed:
+
+- The field is **`message_text`**, not `message`. A wrong name is a `400`.
+- **Send `sender`.** It is optional in the schema, but the bank parsers route on
+  it. Without it the message body is used for routing instead and the parsed
+  `bank_name` is empty, so an account is matched on last four digits alone.
+- **`received_at` must be ISO-8601** (`2026-08-29T14:32:05`). MacroDroid's native
+  SMS timestamp is epoch milliseconds or a locale string; format it explicitly or
+  the request fails validation.
+
+#### 3. Confirm messages are arriving
+
+```powershell
+$auth = @{ Authorization = "Bearer $($login.data.access_token)" }
+
+# Everything captured, newest first
+Invoke-RestMethod "$base/raw-events" -Headers $auth
+
+# Only the messages no parser could read
+Invoke-RestMethod "$base/raw-events?processing_status=UNKNOWN_FORMAT" -Headers $auth
+```
+
+`PROCESSED` became a transaction. `NEEDS_REVIEW` did too, but against an account
+that was auto-created or archived. `IGNORED` is an OTP or promotional message the
+pipeline correctly declined, not a gap. Only `UNKNOWN_FORMAT` and `FAILED` mean a
+parser is missing.
+
+Nothing is lost in the meantime: raw events are stored before parsing and are
+never deleted, so once a parser is added, replay them with
+
+```powershell
+Invoke-RestMethod "$base/ingest/reprocess" -Method Post `
+  -Headers @{ "X-API-KEY" = $key.data.api_key } `
+  -ContentType application/json -Body '{}'
+```
+
+Bulk backfill of old messages should go to `POST /api/v1/ingest/sms/batch` (up to
+1000 per request) rather than many single posts, which would exhaust the 100
+requests per minute budget.
+
+#### 4. Look at your data
+
+Open `https://<your-service>.onrender.com/dashboard` and sign in with the account
+from step 1.
 
 ### Free tier caveat
 

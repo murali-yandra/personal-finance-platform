@@ -4,20 +4,22 @@ Backend service for the Personal Finance Tracking Platform.
 
 This backend currently includes:
 
-- FastAPI application startup
-- Health endpoint
-- Environment configuration
-- PostgreSQL/SQLModel session wiring
-- Alembic migration scaffold
-- Internal event dispatcher scaffold
-- Argon2id password hashing
-- JWT access and refresh token services
-- User registration, login, refresh, and current-user endpoints
-- Authentication middleware for protected API paths
-- Security and financial calculation foundations
-- Pytest setup
+- Argon2id password hashing, JWT access and refresh tokens, and authentication
+  middleware over every `/api/v1` path
+- Accounts with archive-instead-of-delete, and transactions with fingerprint
+  duplicate detection, an append-only audit trail and Decimal balance updates
+  committed in the same transaction as the write
+- SMS ingestion (`/ingest/sms`, `/ingest/sms/batch`, `/ingest/reprocess`)
+  authenticated by per-user API keys, with a read-only queue at `/raw-events`
+- A parser engine for ICICI, HDFC and SBI with a generic fallback, merchant
+  normalization and category resolution
+- Reporting, the balance engine, transfers, historical import and AI suggestions
+- Structured JSON logging with redaction, request correlation, rate limiting,
+  roles and admin APIs
+- A read-only dashboard at `/dashboard`
 
-SMS ingestion, Telegram, AI, and financial business logic are not implemented yet.
+Telegram and AI are off by default behind `ENABLE_TELEGRAM` and `ENABLE_AI`.
+MFA is the one roadmap item left open. See `docs/` for the per-sprint notes.
 
 ## Local Development
 
