@@ -73,3 +73,54 @@ async def test_dashboard_clears_the_password_on_sign_out(client: AsyncClient) ->
     end = body.index("}", start)
 
     assert '$("password").value = ""' in body[start:end]
+
+
+@pytest.mark.asyncio
+async def test_dashboard_offers_account_creation(client: AsyncClient) -> None:
+    """A new user must be able to start without Swagger UI or a terminal."""
+    body = (await client.get(DASHBOARD_URL)).text
+
+    assert "Create an account" in body
+    assert '"/auth/register"' in body
+
+
+@pytest.mark.asyncio
+async def test_sign_up_collects_a_display_name(client: AsyncClient) -> None:
+    """display_name is required by the register endpoint, so the form asks for it."""
+    body = (await client.get(DASHBOARD_URL)).text
+
+    assert 'id="display-name"' in body
+    assert "display_name" in body
+
+
+@pytest.mark.asyncio
+async def test_sign_up_states_the_password_policy(client: AsyncClient) -> None:
+    """The rules are enforced server-side; showing them avoids a guessing game."""
+    body = (await client.get(DASHBOARD_URL)).text
+
+    assert "uppercase letter" in body
+    assert "number" in body
+
+
+@pytest.mark.asyncio
+async def test_expired_session_returns_to_sign_in(client: AsyncClient) -> None:
+    """showLogin must reset the form, not leave a half-filled sign-up."""
+    body = (await client.get(DASHBOARD_URL)).text
+
+    start = body.index('function showLogin(message = "") {')
+    end = body.index("\n}", start)
+
+    assert "setMode(false)" in body[start:end]
+
+
+@pytest.mark.asyncio
+async def test_hidden_elements_are_actually_hidden(client: AsyncClient) -> None:
+    """Author styles beat the user-agent default for [hidden].
+
+    Regression: `label { display: block }` overrode the browser's built-in
+    `[hidden] { display: none }`, so the sign-up-only fields rendered on the
+    sign-in form.
+    """
+    body = (await client.get(DASHBOARD_URL)).text
+
+    assert "[hidden] { display: none !important; }" in body
