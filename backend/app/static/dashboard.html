@@ -30,6 +30,9 @@
     }
   }
   * { box-sizing: border-box; }
+  /* Author rules like `label { display: block }` beat the user-agent default
+     for [hidden], so state it explicitly or hidden elements still render. */
+  [hidden] { display: none !important; }
   body {
     margin: 0;
     background: var(--bg);
@@ -89,6 +92,8 @@
   label { display: block; margin-bottom: 0.75rem; }
   label span { display: block; font-size: 0.82rem; color: var(--muted); margin-bottom: 0.25rem; }
   #login { max-width: 340px; margin: 4rem auto; }
+  #login a { color: var(--accent); }
+  label small { display: block; margin-top: 0.35rem; font-size: 0.78rem; line-height: 1.4; }
   .error { color: var(--debit); font-size: 0.88rem; min-height: 1.2rem; margin-top: 0.5rem; }
   .pill { font-size: 0.72rem; padding: 0.1rem 0.45rem; border-radius: 999px;
           border: 1px solid var(--border); color: var(--muted); }
@@ -100,10 +105,24 @@
   <div class="card">
     <h1 style="margin-bottom:1rem">Ledger AI</h1>
     <form id="login-form">
+      <label id="name-field" hidden>
+        <span>Your name</span>
+        <input id="display-name" type="text" autocomplete="name" maxlength="255" />
+      </label>
       <label><span>Email</span><input id="email" type="email" autocomplete="username" required /></label>
-      <label><span>Password</span><input id="password" type="password" autocomplete="current-password" required /></label>
-      <button class="primary" type="submit" style="width:100%">Sign in</button>
+      <label>
+        <span>Password</span>
+        <input id="password" type="password" autocomplete="current-password" required />
+        <small class="muted" id="password-hint" hidden>
+          At least 8 characters, with an uppercase letter, a lowercase letter and a number.
+        </small>
+      </label>
+      <button class="primary" type="submit" style="width:100%" id="submit">Sign in</button>
       <p class="error" id="login-error" role="alert"></p>
+      <p class="muted" style="font-size:0.88rem;margin:0.25rem 0 0">
+        <span id="toggle-prompt">First time here?</span>
+        <a href="#" id="toggle-mode">Create an account</a>
+      </p>
     </form>
   </div>
 </div>
@@ -427,9 +446,11 @@ function escapeHtml(value) {
 function showLogin(message = "") {
   $("app").hidden = true;
   $("login").hidden = false;
-  $("login-error").textContent = message;
   // Never leave a password sitting in the form once the session is over.
   $("password").value = "";
+  // An expired session should land on sign-in, not a half-filled sign-up form.
+  setMode(false);
+  $("login-error").textContent = message;
 }
 
 function showApp() {
@@ -437,21 +458,57 @@ function showApp() {
   $("app").hidden = false;
 }
 
+let registering = false;
+
+function setMode(next) {
+  registering = next;
+  $("name-field").hidden = !next;
+  $("display-name").required = next;
+  $("password-hint").hidden = !next;
+  $("password").autocomplete = next ? "new-password" : "current-password";
+  $("submit").textContent = next ? "Create account" : "Sign in";
+  $("toggle-prompt").textContent = next ? "Already registered?" : "First time here?";
+  $("toggle-mode").textContent = next ? "Sign in" : "Create an account";
+  $("login-error").textContent = "";
+}
+
+$("toggle-mode").addEventListener("click", (event) => {
+  event.preventDefault();
+  setMode(!registering);
+});
+
+async function post(path, payload) {
+  const response = await fetch(`${API}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    // Field-level validation detail is more useful than the generic message.
+    const detail = body?.error?.details?.[0]?.message;
+    throw new Error(detail || body?.error?.message || `Request failed (${response.status})`);
+  }
+  return body;
+}
+
 $("login-form").addEventListener("submit", async (event) => {
   event.preventDefault();
-  const button = event.target.querySelector("button");
+  const button = $("submit");
   button.disabled = true;
   $("login-error").textContent = "";
+  const email = $("email").value;
+  const password = $("password").value;
   try {
-    const response = await fetch(`${API}/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: $("email").value, password: $("password").value }),
-    });
-    const body = await response.json().catch(() => null);
-    if (!response.ok) {
-      throw new Error(body?.error?.message || "Sign in failed.");
+    if (registering) {
+      await post("/auth/register", {
+        email,
+        password,
+        display_name: $("display-name").value,
+      });
     }
+    // Registration returns only a user id, so sign in either way.
+    const body = await post("/auth/login", { email, password });
     saveTokens(body.data);
     $("password").value = "";
     showApp();
