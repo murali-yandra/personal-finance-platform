@@ -15,6 +15,7 @@ from app.api.merchants import router as merchants_router
 from app.api.middleware.authentication import AuthenticationMiddleware
 from app.api.middleware.rate_limit import RateLimitMiddleware
 from app.api.middleware.request_context import RequestContextMiddleware
+from app.api.raw_events import router as raw_events_router
 from app.api.reports import router as reports_router
 from app.api.telegram import router as telegram_router
 from app.api.transactions import router as transactions_router
@@ -44,6 +45,7 @@ def create_app() -> FastAPI:
     application.include_router(transactions_router, prefix="/api/v1")
     application.include_router(audit_router, prefix="/api/v1")
     application.include_router(ingest_router, prefix="/api/v1")
+    application.include_router(raw_events_router, prefix="/api/v1")
     application.include_router(merchants_router, prefix="/api/v1")
     application.include_router(categories_router, prefix="/api/v1")
     application.include_router(telegram_router, prefix="/api/v1")
