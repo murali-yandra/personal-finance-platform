@@ -5,13 +5,7 @@ import jwt
 import pytest
 
 from app.config import get_settings
-from app.core.jwt import (
-    ACCESS_TOKEN_EXPIRE_MINUTES,
-    JWT_ALGORITHM,
-    REFRESH_TOKEN_EXPIRE_DAYS,
-    JwtService,
-    TokenType,
-)
+from app.core.jwt import JWT_ALGORITHM, REFRESH_TOKEN_EXPIRE_DAYS, JwtService, TokenType
 from app.core.refresh_token import (
     RefreshTokenExpiredError,
     RefreshTokenInvalidError,
@@ -52,7 +46,7 @@ def encode_refresh_token_with_claims(claim_overrides: dict[str, object]) -> str:
     return jwt.encode(claims, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 
-def test_refresh_access_token_returns_new_access_token() -> None:
+def test_refresh_access_token_returns_validated_refresh_claims() -> None:
     jwt_service = build_jwt_service()
     refresh_token_service = build_refresh_token_service(jwt_service)
     user_id = uuid4()
@@ -61,21 +55,14 @@ def test_refresh_access_token_returns_new_access_token() -> None:
         email=USER_EMAIL,
         role=USER_ROLE,
     )
-    refresh_claims = jwt_service.decode_token(refresh_token, TokenType.REFRESH)
 
     result = refresh_token_service.refresh_access_token(refresh_token)
-    access_claims = jwt_service.decode_token(result.access_token, TokenType.ACCESS)
 
     assert isinstance(result, RefreshTokenResult)
-    assert access_claims["sub"] == str(user_id)
-    assert access_claims["user_id"] == str(user_id)
-    assert access_claims["email"] == USER_EMAIL
-    assert access_claims["role"] == USER_ROLE
-    assert access_claims["token_type"] == TokenType.ACCESS.value
-    assert access_claims["exp"] - access_claims["iat"] == (
-        ACCESS_TOKEN_EXPIRE_MINUTES * 60
-    )
-    assert access_claims["jti"] != refresh_claims["jti"]
+    assert result.user_id == user_id
+    assert result.email == USER_EMAIL
+    assert result.role == USER_ROLE
+    assert not hasattr(result, "access_token")
     assert not hasattr(result, "refresh_token")
 
 
@@ -170,8 +157,8 @@ def test_get_refresh_token_service_uses_environment_settings(
             email=USER_EMAIL,
         )
         result = service.refresh_access_token(refresh_token)
-        claims = build_jwt_service().decode_token(result.access_token, TokenType.ACCESS)
 
-        assert claims["user_id"] == str(user_id)
+        assert result.user_id == user_id
+        assert result.email == USER_EMAIL
     finally:
         get_settings.cache_clear()
