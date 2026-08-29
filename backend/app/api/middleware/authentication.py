@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from sqlmodel import Session
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from app.core.context import set_current_user_id
 from app.core.jwt import (
     JwtService,
     JwtTokenExpiredError,
@@ -28,10 +29,19 @@ BEARER_SCHEME = "bearer"
 
 PUBLIC_PATHS = {
     "/health",
+    "/health/ready",
     "/api/v1/health",
+    "/api/v1/health/ready",
     "/api/v1/auth/register",
     "/api/v1/auth/login",
     "/api/v1/auth/refresh",
+    # Authenticated by X-API-KEY instead of a JWT, so the bearer-token
+    # middleware must not reject the request before the key is checked.
+    "/api/v1/ingest/sms",
+    "/api/v1/ingest/sms/batch",
+    "/api/v1/ingest/reprocess",
+    # Authenticated by Telegram's secret-token header instead of a JWT.
+    "/api/v1/telegram/webhook",
 }
 PROTECTED_PREFIX = "/api/v1"
 
@@ -139,6 +149,9 @@ def _extract_user_id(claims: dict[str, object]) -> UUID | None:
 def _attach_current_user(request: Request, user: User) -> None:
     request.state.current_user = user
     request.state.current_user_id = user.id
+    # Bound here so every log line from the request carries the user id, which
+    # 10-security_standards.md section 11 requires of structured logs.
+    set_current_user_id(user.id)
 
 
 def _authentication_error_response(request: Request, code: str) -> JSONResponse:

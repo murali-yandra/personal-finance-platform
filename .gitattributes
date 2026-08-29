@@ -1,0 +1,19 @@
+# Normalize line endings so a Windows checkout cannot break the container.
+#
+# The backend image runs ./scripts/start.sh as its CMD. With core.autocrlf=true
+# a Windows clone rewrites shell scripts to CRLF, and COPY bakes them into the
+# image, so the shebang becomes "#!/usr/bin/env sh\r" and the container dies
+# with "env: 'sh\r': No such file or directory". Linux CI never sees it.
+* text=auto
+
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary

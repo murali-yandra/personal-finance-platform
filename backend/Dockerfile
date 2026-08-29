@@ -13,10 +13,11 @@ RUN python -m pip install --no-cache-dir uv \
 COPY . .
 
 RUN uv pip install --system --no-cache -e . \
+    && chmod +x ./scripts/start.sh \
     && chown -R app:app /app
 
 USER app
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["./scripts/start.sh"]

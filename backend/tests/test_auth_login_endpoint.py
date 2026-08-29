@@ -17,6 +17,11 @@ from app.db.session import get_session
 from app.domains.users.models import User
 from app.main import app
 
+# Request and correlation ids must be UUIDs: they are echoed into logs and
+# audit rows, so an arbitrary client string is replaced rather than trusted.
+REQUEST_ID = "33333333-3333-4333-8333-333333333333"
+CORRELATION_ID = "44444444-4444-4444-8444-444444444444"
+
 JWT_SECRET = "placeholder-test-jwt-secret-32-bytes"
 
 
@@ -121,8 +126,8 @@ async def test_login_endpoint_rejects_unknown_email(
             "password": "SecurePass1",
         },
         headers={
-            "X-Request-ID": "request-login-unknown",
-            "X-Correlation-ID": "correlation-login-unknown",
+            "X-Request-ID": REQUEST_ID,
+            "X-Correlation-ID": CORRELATION_ID,
         },
     )
 
@@ -132,8 +137,8 @@ async def test_login_endpoint_rejects_unknown_email(
         "error": {
             "code": "INVALID_CREDENTIALS",
             "message": "Invalid email or password.",
-            "request_id": "request-login-unknown",
-            "correlation_id": "correlation-login-unknown",
+            "request_id": REQUEST_ID,
+            "correlation_id": CORRELATION_ID,
         },
     }
 

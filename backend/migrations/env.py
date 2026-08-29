@@ -5,7 +5,16 @@ from sqlalchemy import engine_from_config, pool
 from sqlmodel import SQLModel
 
 from app.config import get_settings
+from app.domains.access import UserApiKey, UserSession  # noqa: F401
 from app.domains.accounts import Account  # noqa: F401
+from app.domains.ai import AISuggestion, UserFeedback  # noqa: F401
+from app.domains.audit import AuditLog  # noqa: F401
+from app.domains.balances import BalanceSnapshot  # noqa: F401
+from app.domains.categories import Category  # noqa: F401
+from app.domains.ingestion import RawEvent  # noqa: F401
+from app.domains.merchants import Merchant, MerchantPattern  # noqa: F401
+from app.domains.transactions import Transaction  # noqa: F401
+from app.domains.transfers import Transfer  # noqa: F401
 from app.domains.users import User, UserSettings  # noqa: F401
 
 config = context.config

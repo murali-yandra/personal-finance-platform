@@ -13,6 +13,11 @@ from app.db.session import get_session
 from app.domains.users.models import User, UserSettings
 from app.main import app
 
+# Request and correlation ids must be UUIDs: they are echoed into logs and
+# audit rows, so an arbitrary client string is replaced rather than trusted.
+REQUEST_ID = "11111111-1111-4111-8111-111111111111"
+CORRELATION_ID = "22222222-2222-4222-8222-222222222222"
+
 
 @pytest.fixture
 def test_engine():
@@ -103,8 +108,8 @@ async def test_register_endpoint_rejects_duplicate_email(
         "/api/v1/auth/register",
         json={**request_body, "email": "MURALI@example.com"},
         headers={
-            "X-Request-ID": "request-123",
-            "X-Correlation-ID": "correlation-123",
+            "X-Request-ID": REQUEST_ID,
+            "X-Correlation-ID": CORRELATION_ID,
         },
     )
 
@@ -115,8 +120,8 @@ async def test_register_endpoint_rejects_duplicate_email(
         "error": {
             "code": "USER_ALREADY_EXISTS",
             "message": "A user with this email already exists.",
-            "request_id": "request-123",
-            "correlation_id": "correlation-123",
+            "request_id": REQUEST_ID,
+            "correlation_id": CORRELATION_ID,
         },
     }
 
@@ -268,8 +273,8 @@ async def test_register_endpoint_returns_standard_500_for_unexpected_errors(
                         "display_name": "Unexpected Error",
                     },
                     headers={
-                        "X-Request-ID": "request-500",
-                        "X-Correlation-ID": "correlation-500",
+                        "X-Request-ID": REQUEST_ID,
+                        "X-Correlation-ID": CORRELATION_ID,
                     },
                 )
     finally:
@@ -281,8 +286,8 @@ async def test_register_endpoint_returns_standard_500_for_unexpected_errors(
         "error": {
             "code": "UNEXPECTED_ERROR",
             "message": "An unexpected error occurred.",
-            "request_id": "request-500",
-            "correlation_id": "correlation-500",
+            "request_id": REQUEST_ID,
+            "correlation_id": CORRELATION_ID,
         },
     }
     assert "database exploded" not in response.text

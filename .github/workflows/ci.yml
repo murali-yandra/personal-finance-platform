@@ -50,6 +50,27 @@ jobs:
           DATABASE_URL: postgresql+psycopg://finance_app:finance_app_ci_password@localhost:55432/finance?connect_timeout=5
         run: uv run pytest tests/test_db_session.py
 
+      - name: Run migrations and integration tests
+        working-directory: backend
+        env:
+          RUN_INTEGRATION_TESTS: "1"
+          DATABASE_URL: postgresql+psycopg://finance_app:finance_app_ci_password@localhost:55432/finance?connect_timeout=5
+          JWT_SECRET: ci-placeholder-jwt-secret-32-bytes-long
+          INGEST_API_KEY: ci-placeholder-ingest-api-key
+        run: |
+          uv run alembic upgrade head
+          uv run pytest tests/integration
+
+      - name: Verify migrations are reversible
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql+psycopg://finance_app:finance_app_ci_password@localhost:55432/finance?connect_timeout=5
+          JWT_SECRET: ci-placeholder-jwt-secret-32-bytes-long
+          INGEST_API_KEY: ci-placeholder-ingest-api-key
+        run: |
+          uv run alembic downgrade base
+          uv run alembic upgrade head
+
       - name: Run Ruff
         working-directory: backend
         run: uv run ruff check .

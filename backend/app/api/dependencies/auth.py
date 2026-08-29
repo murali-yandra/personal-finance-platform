@@ -4,6 +4,7 @@ from uuid import UUID
 from fastapi import Depends, Header, Request
 from sqlmodel import Session
 
+from app.core.context import set_current_user_id
 from app.core.jwt import (
     JwtService,
     JwtTokenExpiredError,
@@ -35,6 +36,7 @@ def get_current_user(
     if isinstance(current_user, User):
         if not current_user.is_active or current_user.deleted_at is not None:
             raise AccountDisabledError()
+        set_current_user_id(current_user.id)
         return current_user
 
     token = _extract_bearer_token(authorization)
@@ -49,6 +51,7 @@ def get_current_user(
 
     request.state.current_user = user
     request.state.current_user_id = user.id
+    set_current_user_id(user.id)
     return user
 
 

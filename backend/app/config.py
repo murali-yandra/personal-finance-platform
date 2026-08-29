@@ -1,7 +1,8 @@
 from functools import lru_cache
+from typing import Annotated
 
-from pydantic import SecretStr
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import SecretStr, field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -24,9 +25,47 @@ class Settings(BaseSettings):
 
     jwt_secret: SecretStr
     ingest_api_key: SecretStr
+    ingest_user_email: str = ""
 
     enable_ai: bool = False
     enable_telegram: bool = False
+
+    telegram_bot_token: SecretStr = SecretStr("")
+    telegram_webhook_secret: SecretStr = SecretStr("")
+
+    rate_limit_enabled: bool = True
+    rate_limit_per_minute: int = 100
+
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_model: str = "qwen3"
+
+    cors_origins: Annotated[list[str], NoDecode] = []
+
+    @field_validator("database_url", mode="after")
+    @classmethod
+    def normalize_database_url(cls, value: str) -> str:
+        """Force the psycopg driver on managed-Postgres connection strings.
+
+        Hosting providers hand out ``postgres://`` or ``postgresql://`` URLs, which
+        SQLAlchemy resolves to psycopg2. This project ships psycopg 3, so the driver
+        has to be named explicitly.
+        """
+        for prefix in ("postgresql+", "postgres+"):
+            if value.startswith(prefix):
+                return value
+        if value.startswith("postgres://"):
+            return value.replace("postgres://", "postgresql+psycopg://", 1)
+        if value.startswith("postgresql://"):
+            return value.replace("postgresql://", "postgresql+psycopg://", 1)
+        return value
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def split_cors_origins(cls, value: object) -> object:
+        """Accept a comma-separated CORS origin list from the environment."""
+        if isinstance(value, str):
+            return [origin.strip() for origin in value.split(",") if origin.strip()]
+        return value
 
 
 @lru_cache
