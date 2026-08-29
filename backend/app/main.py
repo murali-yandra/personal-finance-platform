@@ -8,6 +8,7 @@ from app.api.api_keys import router as api_keys_router
 from app.api.audit import router as audit_router
 from app.api.auth import router as auth_router
 from app.api.categories import router as categories_router
+from app.api.dashboard import router as dashboard_router
 from app.api.errors import register_exception_handlers
 from app.api.health import router as health_router
 from app.api.ingest import router as ingest_router
@@ -52,6 +53,7 @@ def create_app() -> FastAPI:
     application.include_router(ai_router, prefix="/api/v1")
     application.include_router(api_keys_router, prefix="/api/v1")
     application.include_router(admin_router, prefix="/api/v1")
+    application.include_router(dashboard_router)
     application.add_middleware(AuthenticationMiddleware)
 
     if settings.rate_limit_enabled:
