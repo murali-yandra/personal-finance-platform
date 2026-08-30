@@ -28,6 +28,8 @@ EXPECTED_TABLES = {
     "user_feedback",
     "user_api_keys",
     "user_sessions",
+    "user_mfa",
+    "mfa_recovery_codes",
 }
 
 

@@ -5,7 +5,12 @@ from sqlalchemy import engine_from_config, pool
 from sqlmodel import SQLModel
 
 from app.config import get_settings
-from app.domains.access import UserApiKey, UserSession  # noqa: F401
+from app.domains.access import (  # noqa: F401
+    MfaRecoveryCode,
+    UserApiKey,
+    UserMfa,
+    UserSession,
+)
 from app.domains.accounts import Account  # noqa: F401
 from app.domains.ai import AISuggestion, UserFeedback  # noqa: F401
 from app.domains.audit import AuditLog  # noqa: F401

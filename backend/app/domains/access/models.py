@@ -98,3 +98,68 @@ class UserSession(SQLModel, table=True):
     def is_active(self) -> bool:
         """Return whether this session may still be used."""
         return self.revoked_at is None
+
+
+class UserMfa(SQLModel, table=True):
+    """A user's second authentication factor.
+
+    ``is_enabled`` is false until a code proves the secret was transferred to
+    the authenticator correctly. A record can therefore exist without MFA being
+    required, which is what makes abandoning a half-finished setup harmless.
+    """
+
+    __tablename__ = "user_mfa"
+    __table_args__ = (Index("idx_user_mfa_user_id", "user_id", unique=True),)
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    user_id: UUID = Field(foreign_key="users.id", nullable=False)
+
+    # The shared TOTP secret. Unlike a password this must be recoverable to
+    # compute the expected code, so it cannot be hashed.
+    secret: str = Field(sa_column=Column(Text, nullable=False))
+
+    is_enabled: bool = Field(default=False, nullable=False)
+
+    created_at: datetime = Field(
+        sa_column=Column(
+            DateTime(timezone=False),
+            nullable=False,
+            server_default=func.now(),
+        )
+    )
+    confirmed_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=False), nullable=True),
+    )
+    last_used_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=False), nullable=True),
+    )
+
+
+class MfaRecoveryCode(SQLModel, table=True):
+    """A single-use code for regaining access without the authenticator.
+
+    Stored hashed like a password, and marked used rather than deleted so a
+    replay is refused rather than silently accepted.
+    """
+
+    __tablename__ = "mfa_recovery_codes"
+    __table_args__ = (Index("idx_mfa_recovery_codes_mfa_id", "mfa_id"),)
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    mfa_id: UUID = Field(foreign_key="user_mfa.id", nullable=False)
+
+    code_hash: str = Field(sa_column=Column(Text, nullable=False))
+
+    created_at: datetime = Field(
+        sa_column=Column(
+            DateTime(timezone=False),
+            nullable=False,
+            server_default=func.now(),
+        )
+    )
+    used_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=False), nullable=True),
+    )

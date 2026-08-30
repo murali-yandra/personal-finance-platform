@@ -12,6 +12,7 @@ from app.api.errors import register_exception_handlers
 from app.api.health import router as health_router
 from app.api.ingest import router as ingest_router
 from app.api.merchants import router as merchants_router
+from app.api.mfa import router as mfa_router
 from app.api.middleware.authentication import AuthenticationMiddleware
 from app.api.middleware.rate_limit import RateLimitMiddleware
 from app.api.middleware.request_context import RequestContextMiddleware
@@ -44,6 +45,7 @@ def create_app() -> FastAPI:
     application.include_router(users_router, prefix="/api/v1")
     application.include_router(settings_router, prefix="/api/v1")
     application.include_router(sessions_router, prefix="/api/v1")
+    application.include_router(mfa_router, prefix="/api/v1")
     application.include_router(accounts_router, prefix="/api/v1")
     application.include_router(transactions_router, prefix="/api/v1")
     application.include_router(audit_router, prefix="/api/v1")

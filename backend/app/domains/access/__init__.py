@@ -1,7 +1,21 @@
-"""Access control: API keys, sessions and roles."""
+"""Access control: API keys, sessions, MFA and roles."""
 
 from app.domains.access.api_keys import ApiKeyService
-from app.domains.access.models import UserApiKey, UserSession
+from app.domains.access.mfa import MfaService
+from app.domains.access.models import (
+    MfaRecoveryCode,
+    UserApiKey,
+    UserMfa,
+    UserSession,
+)
 from app.domains.access.sessions import SessionService
 
-__all__ = ["ApiKeyService", "SessionService", "UserApiKey", "UserSession"]
+__all__ = [
+    "ApiKeyService",
+    "MfaRecoveryCode",
+    "MfaService",
+    "SessionService",
+    "UserApiKey",
+    "UserMfa",
+    "UserSession",
+]

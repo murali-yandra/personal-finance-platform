@@ -14,9 +14,11 @@ from app.core.refresh_token import (
 )
 from app.core.security import security_service
 from app.db.session import get_session
+from app.domains.access.mfa import MfaRequiredError, MfaService
 from app.domains.access.sessions import SessionService
 from app.domains.users.exceptions import (
     AccountDisabledError,
+    InvalidCredentialsError,
     InvalidTokenApplicationError,
     TokenExpiredApplicationError,
 )
@@ -63,6 +65,7 @@ class LoginUserRequest(BaseModel):
 
     email: EmailStr
     password: str = Field(min_length=1, max_length=128)
+    mfa_code: str | None = Field(default=None, max_length=32)
 
     @field_validator("email")
     @classmethod
@@ -176,10 +179,22 @@ def login_user(
         )
     )
 
+    user = UserRepository(session).get_by_email(request.email)
+
+    # The second factor is checked after the password, and before any token is
+    # issued. Failing here returns nothing usable, so a correct password alone
+    # never yields a session.
+    if user is not None:
+        mfa_service = MfaService(session)
+        if mfa_service.is_enabled(user.id):
+            if not request.mfa_code:
+                raise MfaRequiredError()
+            if not mfa_service.verify(user.id, request.mfa_code):
+                raise InvalidCredentialsError()
+
     # Recorded so the refresh token can be revoked later. A JWT is
     # self-validating, so without this row a stolen token stays usable for its
     # full lifetime and "sign out everywhere" cannot work.
-    user = UserRepository(session).get_by_email(request.email)
     if user is not None:
         SessionService(session).start(
             user_id=user.id,
