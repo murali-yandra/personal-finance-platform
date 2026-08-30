@@ -18,6 +18,51 @@ databases:
     plan: free
 
 services:
+  # Scheduled jobs. Times are UTC; adjust to suit your timezone.
+  - type: cron
+    name: ledger-ai-balance-snapshots
+    runtime: docker
+    repo: https://github.com/murali-yandra/personal-finance-platform
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: starter
+    # 00:30 UTC daily, after the day has closed in most timezones.
+    schedule: "30 0 * * *"
+    dockerCommand: python -m app.scheduler.cli balance-snapshots
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ledger-ai-db
+          property: connectionString
+      - key: JWT_SECRET
+        sync: false
+      - key: INGEST_API_KEY
+        sync: false
+
+  - type: cron
+    name: ledger-ai-daily-digest
+    runtime: docker
+    repo: https://github.com/murali-yandra/personal-finance-platform
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: starter
+    # 02:30 UTC daily, which is 08:00 IST.
+    schedule: "30 2 * * *"
+    dockerCommand: python -m app.scheduler.cli daily-digest
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ledger-ai-db
+          property: connectionString
+      - key: JWT_SECRET
+        sync: false
+      - key: INGEST_API_KEY
+        sync: false
+      - key: ENABLE_TELEGRAM
+        value: "false"
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+
   - type: web
     name: ledger-ai-backend
     runtime: docker

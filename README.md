@@ -39,13 +39,24 @@ All sprints 0-15 of `architecture/14-sprint_roadmap.md` are implemented.
 | 8-10 | Telegram, reporting, balance engine, transfers |
 | 11-13 | Historical import, AI suggestions, learning engine |
 | 14-15 | Structured logging, backups, rate limiting, per-user API keys, roles, admin APIs |
+| Completion | Profile and settings APIs, session tracking, MFA, scheduled jobs |
 
-MVP scope (through Sprint 10) is feature-complete. Telegram and AI ship behind
-`ENABLE_TELEGRAM` and `ENABLE_AI`, off by default until credentials are supplied.
-MFA is the one roadmap item deliberately left open; see
-`backend/docs/sprint-14-15-hardening-saas.md`.
+Every endpoint in `architecture/08-api_contracts.md` is implemented. Telegram
+and AI ship behind `ENABLE_TELEGRAM` and `ENABLE_AI`, off by default until
+credentials are supplied; nothing else requires them.
 
 Per-sprint notes are in `backend/docs/`.
+
+## Scheduled Jobs
+
+```bash
+python -m app.scheduler.cli balance-snapshots   # daily balance history
+python -m app.scheduler.cli daily-digest        # daily Telegram summary
+python -m app.scheduler.cli weekly-digest       # weekly Telegram summary
+```
+
+`render.yaml` declares the first two as cron services. Snapshots are idempotent
+per day, so a retry or a late run is harmless.
 
 ## Verify A Deployment
 
