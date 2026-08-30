@@ -7,17 +7,20 @@ unauthenticated caller is rejected here.
 
 import logging
 import secrets
+from html import escape
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends, Header, status
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
+from app.api.dependencies.auth import get_current_user
 from app.config import Settings, get_settings
 from app.db.session import get_session
 from app.domains.accounts.repository import AccountRepository
 from app.domains.ingestion.exceptions import InvalidApiKeyError
 from app.domains.users.models import User
+from app.shared.exceptions.base import ApplicationError
 from app.shared.schemas.responses import SuccessResponse
 from app.telegram.client import NullTelegramClient
 from app.telegram.commands import CommandContext, handle_command
@@ -28,6 +31,33 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/telegram", tags=["telegram"])
 
 SECRET_TOKEN_HEADER = "X-Telegram-Bot-Api-Secret-Token"
+
+
+class TelegramNotConfiguredError(ApplicationError):
+    """Raised when a test message cannot be delivered."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(
+            code="TELEGRAM_UNAVAILABLE",
+            message=message,
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+
+
+class TestMessageRequest(BaseModel):
+    """Request body for sending a test message."""
+
+    message: str = "Hello from your Personal Finance Tracker."
+
+
+class TestMessageData(BaseModel):
+    """Response data for a test message."""
+
+    delivered: bool
+    chat_id: str
+
+
+TestMessageResponse = SuccessResponse[TestMessageData]
 
 
 class WebhookAcknowledgement(BaseModel):
@@ -110,3 +140,42 @@ def _chat_id(message: dict[str, Any]) -> str | None:
     if raw is None:
         return None
     return str(raw)
+
+
+@router.post("/test", response_model=TestMessageResponse)
+def send_test_message(
+    request: TestMessageRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> TestMessageResponse:
+    """Send a test message to the caller's own Telegram chat.
+
+    Reports precisely why delivery is impossible rather than a generic failure,
+    because the three causes need three different fixes: the feature is off, no
+    chat is linked, or the token is wrong.
+    """
+    settings = get_settings()
+
+    if not settings.enable_telegram:
+        raise TelegramNotConfiguredError(
+            "Telegram is disabled. Set ENABLE_TELEGRAM=true to enable it."
+        )
+    if not current_user.telegram_chat_id:
+        raise TelegramNotConfiguredError(
+            "No Telegram chat is linked. Set telegram_chat_id on your profile."
+        )
+
+    delivered = build_telegram_client(settings).send_message(
+        current_user.telegram_chat_id,
+        escape(request.message),
+    )
+    if not delivered:
+        raise TelegramNotConfiguredError(
+            "Telegram rejected the message. Check TELEGRAM_BOT_TOKEN."
+        )
+
+    return TestMessageResponse(
+        data=TestMessageData(
+            delivered=True,
+            chat_id=current_user.telegram_chat_id,
+        )
+    )

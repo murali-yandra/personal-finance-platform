@@ -16,6 +16,8 @@ from app.api.middleware.authentication import AuthenticationMiddleware
 from app.api.middleware.rate_limit import RateLimitMiddleware
 from app.api.middleware.request_context import RequestContextMiddleware
 from app.api.reports import router as reports_router
+from app.api.sessions import router as sessions_router
+from app.api.settings import router as settings_router
 from app.api.telegram import router as telegram_router
 from app.api.transactions import router as transactions_router
 from app.api.transfers import router as transfers_router
@@ -40,6 +42,8 @@ def create_app() -> FastAPI:
     application.include_router(health_router, prefix="/api/v1")
     application.include_router(auth_router, prefix="/api/v1")
     application.include_router(users_router, prefix="/api/v1")
+    application.include_router(settings_router, prefix="/api/v1")
+    application.include_router(sessions_router, prefix="/api/v1")
     application.include_router(accounts_router, prefix="/api/v1")
     application.include_router(transactions_router, prefix="/api/v1")
     application.include_router(audit_router, prefix="/api/v1")

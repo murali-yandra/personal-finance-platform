@@ -11,6 +11,7 @@ from sqlmodel import Session, SQLModel, create_engine
 from app.core.jwt import JwtService, TokenType, get_jwt_service
 from app.core.refresh_token import RefreshTokenService, get_refresh_token_service
 from app.db.session import get_session
+from app.domains.access.sessions import SessionService
 from app.domains.users.models import User
 from app.main import app
 
@@ -21,6 +22,17 @@ CORRELATION_ID = "44444444-4444-4444-8444-444444444444"
 
 JWT_SECRET = "placeholder-test-jwt-secret-32-bytes"
 USER_EMAIL = "murali@example.com"
+
+
+def _start_session(engine, user_id: UUID, refresh_token: str) -> str:
+    """Record the session a real login would have created.
+
+    Refresh validates the session, so a forged token needs the same row a
+    genuine login writes. Returns the token for convenient chaining.
+    """
+    with Session(engine) as session:
+        SessionService(session).start(user_id=user_id, refresh_token=refresh_token)
+    return refresh_token
 
 
 @pytest.fixture
@@ -94,6 +106,7 @@ async def test_refresh_endpoint_returns_new_access_token(
         user_id=user_id,
         email=USER_EMAIL,
     )
+    _start_session(test_engine, user_id, refresh_token)
 
     response = await auth_client.post(
         "/api/v1/auth/refresh",
@@ -126,6 +139,7 @@ async def test_refresh_endpoint_uses_current_database_email_for_access_token(
         user_id=user_id,
         email="old@example.com",
     )
+    _start_session(test_engine, user_id, refresh_token)
 
     response = await auth_client.post(
         "/api/v1/auth/refresh",
@@ -223,6 +237,7 @@ async def test_refresh_endpoint_rejects_disabled_user(
         user_id=user_id,
         email=USER_EMAIL,
     )
+    _start_session(test_engine, user_id, refresh_token)
 
     response = await auth_client.post(
         "/api/v1/auth/refresh",
@@ -251,6 +266,7 @@ async def test_refresh_endpoint_rejects_soft_deleted_user(
         user_id=user_id,
         email=USER_EMAIL,
     )
+    _start_session(test_engine, user_id, refresh_token)
 
     response = await auth_client.post(
         "/api/v1/auth/refresh",

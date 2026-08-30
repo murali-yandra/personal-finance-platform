@@ -21,6 +21,10 @@ os.environ.setdefault("INGEST_API_KEY", "placeholder-test-ingest-api-key")
 os.environ.setdefault("RATE_LIMIT_ENABLED", "false")
 
 from app.core.jwt import JwtService, get_jwt_service  # noqa: E402
+from app.core.refresh_token import (  # noqa: E402
+    RefreshTokenService,
+    get_refresh_token_service,
+)
 from app.db.session import get_session  # noqa: E402
 from app.main import app  # noqa: E402
 
@@ -76,6 +80,12 @@ def override_session(test_engine) -> Generator[None, None, None]:
 
     app.dependency_overrides[get_session] = get_test_session
     app.dependency_overrides[get_jwt_service] = lambda: JwtService(TEST_JWT_SECRET)
+    # get_refresh_token_service builds its own JwtService from settings rather
+    # than through Depends, so without this override an ambient JWT_SECRET
+    # would sign and verify tokens with different keys.
+    app.dependency_overrides[get_refresh_token_service] = lambda: RefreshTokenService(
+        JwtService(TEST_JWT_SECRET)
+    )
     app.state.auth_session_factory = lambda: Session(test_engine)
     app.state.auth_jwt_service_factory = lambda: JwtService(TEST_JWT_SECRET)
     try:

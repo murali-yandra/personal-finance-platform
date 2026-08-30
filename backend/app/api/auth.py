@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from sqlmodel import Session
 
@@ -14,6 +14,7 @@ from app.core.refresh_token import (
 )
 from app.core.security import security_service
 from app.db.session import get_session
+from app.domains.access.sessions import SessionService
 from app.domains.users.exceptions import (
     AccountDisabledError,
     InvalidTokenApplicationError,
@@ -81,6 +82,22 @@ class LoginUserData(BaseModel):
 LoginUserResponse = SuccessResponse[LoginUserData]
 
 
+class LogoutRequest(BaseModel):
+    """Request body for ending a session."""
+
+    refresh_token: str = Field(min_length=1)
+    everywhere: bool = False
+
+
+class LogoutData(BaseModel):
+    """Response data for a logout."""
+
+    sessions_revoked: int
+
+
+LogoutResponse = SuccessResponse[LogoutData]
+
+
 class RefreshTokenRequest(BaseModel):
     """Request body for refreshing an access token."""
 
@@ -144,6 +161,8 @@ def register_user(
 @router.post("/login", response_model=LoginUserResponse)
 def login_user(
     request: LoginUserRequest,
+    http_request: Request,
+    session: Annotated[Session, Depends(get_session)],
     authentication_service: Annotated[
         UserAuthenticationService,
         Depends(get_authentication_service),
@@ -156,6 +175,19 @@ def login_user(
             password=request.password,
         )
     )
+
+    # Recorded so the refresh token can be revoked later. A JWT is
+    # self-validating, so without this row a stolen token stays usable for its
+    # full lifetime and "sign out everywhere" cannot work.
+    user = UserRepository(session).get_by_email(request.email)
+    if user is not None:
+        SessionService(session).start(
+            user_id=user.id,
+            refresh_token=result.refresh_token,
+            ip_address=_client_ip(http_request),
+            user_agent=http_request.headers.get("User-Agent"),
+        )
+
     return LoginUserResponse(
         data=LoginUserData(
             access_token=result.access_token,
@@ -183,6 +215,11 @@ def refresh_access_token(
     except RefreshTokenInvalidError as exc:
         raise InvalidTokenApplicationError() from exc
 
+    # A revoked or expired session refuses the exchange even though the JWT
+    # itself still verifies. That gap is the point of tracking sessions.
+    if SessionService(session).validate(request.refresh_token) is None:
+        raise InvalidTokenApplicationError()
+
     user = UserRepository(session).get_by_id(result.user_id)
     if user is None:
         raise InvalidTokenApplicationError()
@@ -195,3 +232,47 @@ def refresh_access_token(
         role=result.role,
     )
     return RefreshTokenResponse(data=RefreshTokenData(access_token=access_token))
+
+
+@router.post("/logout", response_model=LogoutResponse)
+def logout_user(
+    request: LogoutRequest,
+    session: Annotated[Session, Depends(get_session)],
+    refresh_token_service: Annotated[
+        RefreshTokenService,
+        Depends(get_refresh_token_service),
+    ],
+) -> LogoutResponse:
+    """End a session, or every session for the user.
+
+    Logout takes the refresh token rather than an access token, because the
+    refresh token is what has a long life and therefore what actually needs
+    revoking. An already-revoked or unknown token reports zero revocations
+    rather than an error: logging out twice is not a failure, and reporting
+    otherwise would tell an attacker which tokens are real.
+    """
+    session_service = SessionService(session)
+
+    try:
+        result = refresh_token_service.refresh_access_token(request.refresh_token)
+    except (RefreshTokenExpiredError, RefreshTokenInvalidError):
+        return LogoutResponse(data=LogoutData(sessions_revoked=0))
+
+    if request.everywhere:
+        revoked = session_service.revoke_all(result.user_id)
+    else:
+        revoked = 1 if session_service.revoke_by_token(request.refresh_token) else 0
+
+    return LogoutResponse(data=LogoutData(sessions_revoked=revoked))
+
+
+def _client_ip(request: Request) -> str | None:
+    """Return the caller's address, honouring a proxy's forwarded header.
+
+    Behind Nginx or a platform load balancer the socket address is the proxy,
+    so the first entry of X-Forwarded-For is the real client.
+    """
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()[:64]
+    return request.client.host[:64] if request.client else None

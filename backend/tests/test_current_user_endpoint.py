@@ -101,6 +101,8 @@ async def test_current_user_endpoint_returns_authenticated_user(
             "display_name": "Murali Yandra",
             "timezone": "Asia/Kolkata",
             "default_currency": "INR",
+            "telegram_chat_id": None,
+            "role": "USER",
         },
     }
 

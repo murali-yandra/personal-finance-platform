@@ -35,6 +35,10 @@ PUBLIC_PATHS = {
     "/api/v1/auth/register",
     "/api/v1/auth/login",
     "/api/v1/auth/refresh",
+    # Authenticated by the refresh token in its body, like /auth/refresh. It
+    # must not need an access token: the moment you most need to log out is
+    # when that token has already expired.
+    "/api/v1/auth/logout",
     # Authenticated by X-API-KEY instead of a JWT, so the bearer-token
     # middleware must not reject the request before the key is checked.
     "/api/v1/ingest/sms",
